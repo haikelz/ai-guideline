@@ -17,6 +17,9 @@ transactions, migrations, and deployment.
 
 - [`guidelines/javascript-typescript.md`](guidelines/javascript-typescript.md) —
   language-level JavaScript and TypeScript rules.
+- [`guidelines/astro.md`](guidelines/astro.md) — Astro rendering modes,
+  file-based routing, content collections, islands, UI integrations, CMS and
+  i18n boundaries, web quality, testing, and static deployment.
 - [`guidelines/nextjs.md`](guidelines/nextjs.md) — Next.js App Router, React,
   client/server boundaries, state, forms, UI, accessibility, and deployment.
 - [`guidelines/nestjs.md`](guidelines/nestjs.md) — NestJS modules, dependency
@@ -36,6 +39,73 @@ transactions, migrations, and deployment.
 - [`guidelines/docker.md`](guidelines/docker.md) — reproducible images,
   multi-stage builds, BuildKit, runtime security, Compose, health checks,
   migrations, CI delivery, and Kubernetes interoperability.
+
+## Automated Installation
+
+`install.sh` recursively detects supported stacks, including applications in a
+monorepo, and installs only the applicable documents. Preview the selection
+before writing:
+
+```bash
+./install.sh --dry-run /path/to/project
+```
+
+Install the selected guidelines:
+
+```bash
+./install.sh /path/to/project
+```
+
+The installer writes this project-local layout:
+
+```text
+.agents/
+├── general.md
+├── .ai-guideline-manifest
+└── guidelines/
+    └── <detected-stack>.md
+```
+
+It also appends or refreshes a bounded block in the target's root `AGENTS.md` so
+coding agents can discover the installed files. Content outside these markers is
+preserved:
+
+```text
+<!-- AI-GUIDELINES:BEGIN -->
+...
+<!-- AI-GUIDELINES:END -->
+```
+
+The manifest records installed content hashes. On later runs, files that still
+match their previous installed hash update automatically, and obsolete
+unmodified guidelines are removed. A locally modified installed guideline is
+never overwritten by default. Review the conflict, preserve the local policy if
+it is intentional, or explicitly replace it with:
+
+```bash
+./install.sh --force /path/to/project
+```
+
+`--dry-run` never changes the target. The installer also rejects malformed
+managed markers and refuses to install into this source repository.
+
+### Detection matrix
+
+| Evidence found anywhere in the target | Guidelines selected |
+| --- | --- |
+| Every project | General |
+| `package.json`, `tsconfig.json`, or `jsconfig.json` | JavaScript and TypeScript |
+| Astro dependency or `astro.config.*` | JavaScript and TypeScript, Astro, Docker |
+| Next.js dependency or `next.config.*` | JavaScript and TypeScript, Next.js, Docker |
+| NestJS dependency or `nest-cli.json` | JavaScript and TypeScript, NestJS, Docker |
+| `go.mod` | Go, Docker |
+| Echo module in `go.mod` | Echo, in addition to Go |
+| GORM plus a PostgreSQL driver in `go.mod` | GORM and PostgreSQL, in addition to Go |
+| Dockerfile or Compose file | Docker |
+
+Generated output, dependencies, VCS metadata, vendor trees, caches, and an
+existing `.agents` directory are excluded from detection. Detection does not
+execute project code or read environment files.
 
 ## Usage
 
@@ -58,7 +128,8 @@ code uniform.
 
 For framework work, load both the language guideline and the relevant companion.
 For example, Next.js work uses the JavaScript and TypeScript guideline plus the
-Next.js guideline. An Echo service backed by GORM and PostgreSQL uses all three Go
+Next.js guideline. Astro work uses the language guideline plus the Astro
+guideline. An Echo service backed by GORM and PostgreSQL uses all three Go
 documents. Do not load unrelated framework documents merely because they exist.
 
 ## Core Principles
