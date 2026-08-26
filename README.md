@@ -12,6 +12,8 @@ transactions, migrations, and deployment.
 - [`general.md`](general.md) — repository setup, engineering harness, sources of
   truth, Git-native planning, authority, documentation, verification, CI,
   runbooks, and measured process improvement.
+- [`ignores/README.md`](ignores/README.md) — supported coding-agent ignore files,
+  shared exclusions, tool mappings, and security limitations.
 
 ### JavaScript and TypeScript
 
@@ -56,9 +58,67 @@ Install the selected guidelines:
 ./install.sh /path/to/project
 ```
 
+### Install directly with `curl`
+
+From the target project's root, preview a remote installation:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/haikelz/ai-guideline/master/install.sh \
+  | bash -s -- --dry-run .
+```
+
+Then install:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/haikelz/ai-guideline/master/install.sh \
+  | bash -s -- .
+```
+
+To install into another directory, replace `.` with its path. Arguments after
+`bash -s --` are passed to the installer, so options can be combined:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/haikelz/ai-guideline/master/install.sh \
+  | bash -s -- --force /path/to/project
+```
+
+The piped installer downloads only the detected guidelines and the ignore-file
+template over HTTPS. For reproducible automation, pin both the installer and its
+downloaded files to a reviewed tag or commit:
+
+```bash
+REF='<tag-or-full-commit-sha>'
+curl -fsSL "https://raw.githubusercontent.com/haikelz/ai-guideline/$REF/install.sh" \
+  | AI_GUIDELINE_REF="$REF" bash -s -- .
+```
+
+Review-first installation is safer than piping an uninspected moving branch:
+
+```bash
+curl -fsSLo /tmp/ai-guideline-install.sh \
+  https://raw.githubusercontent.com/haikelz/ai-guideline/master/install.sh
+less /tmp/ai-guideline-install.sh
+bash /tmp/ai-guideline-install.sh --dry-run .
+bash /tmp/ai-guideline-install.sh .
+rm /tmp/ai-guideline-install.sh
+```
+
+`AI_GUIDELINE_BASE_URL` can point the downloaded installer at another HTTPS raw
+content mirror. `AI_GUIDELINE_REF` defaults to `master`.
+
 The installer writes this project-local layout:
 
 ```text
+.cursorignore
+.ignore
+.geminiignore
+.aiderignore
+.continueignore
+.clineignore
+.codeiumignore
+.rooignore
+.aiignore
+AGENTS.md
 .agents/
 ├── general.md
 ├── .ai-guideline-manifest
@@ -88,6 +148,33 @@ it is intentional, or explicitly replace it with:
 
 `--dry-run` never changes the target. The installer also rejects malformed
 managed markers and refuses to install into this source repository.
+
+### Coding-agent ignore files
+
+By default, the installer creates or updates the supported ignore files listed
+above. They share a conservative block for secrets, credentials, dependencies,
+generated output, caches, local state, logs, temporary files, and compiled
+binaries. Existing project-specific content is preserved outside these markers:
+
+```text
+# AI-GUIDELINES-IGNORE:BEGIN
+...
+# AI-GUIDELINES-IGNORE:END
+```
+
+Skip ignore-file installation when a project manages these policies elsewhere:
+
+```bash
+./install.sh --skip-ignore-files /path/to/project
+```
+
+OpenCode does not support `.opencodeignore`; its supported generic file is
+`.ignore`, which is also used by Codex file discovery. Unsupported names such as
+`.claudeignore`, `.codexignore`, `.copilotignore`, and `.ampignore` are not
+created. See the [ignore-file reference](ignores/README.md) for the complete
+agent mapping and enforcement limitations. Ignore files reduce accidental
+context and indexing, but they are not security sandboxes and may be bypassed by
+terminal or plugin tools.
 
 ### Detection matrix
 

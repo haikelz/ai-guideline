@@ -2,13 +2,39 @@
 
 set -euo pipefail
 
-readonly SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 readonly BEGIN_MARKER='<!-- AI-GUIDELINES:BEGIN -->'
 readonly END_MARKER='<!-- AI-GUIDELINES:END -->'
+readonly IGNORE_BEGIN_MARKER='# AI-GUIDELINES-IGNORE:BEGIN'
+readonly IGNORE_END_MARKER='# AI-GUIDELINES-IGNORE:END'
 readonly MANIFEST_REL='.agents/.ai-guideline-manifest'
+readonly DEFAULT_REMOTE_ROOT='https://raw.githubusercontent.com/haikelz/ai-guideline'
+
+local_source_dir=''
+script_path=${BASH_SOURCE[0]:-}
+if [[ -n "$script_path" && -f "$script_path" ]]; then
+  script_dir=$(cd "$(dirname "$script_path")" && pwd)
+  if [[ -f "$script_dir/general.md" && -f "$script_dir/ignores/agent.ignore" ]]; then
+    local_source_dir=$script_dir
+  fi
+fi
+
+source_dir=$local_source_dir
+source_tmp=''
+manifest_tmp=''
+agents_block_tmp=''
+managed_tmp=''
+
+cleanup() {
+  [[ -z "$source_tmp" ]] || rm -rf "$source_tmp"
+  [[ -z "$manifest_tmp" ]] || rm -f "$manifest_tmp"
+  [[ -z "$agents_block_tmp" ]] || rm -f "$agents_block_tmp"
+  [[ -z "$managed_tmp" ]] || rm -f "$managed_tmp"
+}
+trap cleanup EXIT
 
 dry_run=0
 force=0
+skip_ignore_files=0
 target_arg='.'
 target_seen=0
 
@@ -19,14 +45,16 @@ Usage: install.sh [options] [target-directory]
 Detect a project's stack and install the applicable coding-agent guidelines.
 
 Options:
-  --dry-run  Print the detected stack and planned changes without writing.
-  --force    Overwrite locally modified installed guidelines.
-  -h, --help Show this help text.
+  --dry-run          Print the detected stack and plan without writing.
+  --force            Overwrite locally modified installed guidelines.
+  --skip-ignore-files Do not create or update coding-agent ignore files.
+  -h, --help         Show this help text.
 
 Installed layout:
   .agents/general.md
   .agents/guidelines/*.md
   AGENTS.md managed link block
+  Supported coding-agent ignore files in the project root
 EOF
 }
 
@@ -37,6 +65,9 @@ while (($#)); do
       ;;
     --force)
       force=1
+      ;;
+    --skip-ignore-files)
+      skip_ignore_files=1
       ;;
     -h | --help)
       usage
@@ -76,7 +107,7 @@ if [[ ! -d "$target_arg" ]]; then
 fi
 
 readonly TARGET=$(cd "$target_arg" && pwd)
-if [[ "$TARGET" == "$SCRIPT_DIR" ]]; then
+if [[ -n "$local_source_dir" && "$TARGET" == "$local_source_dir" ]]; then
   printf 'install.sh: refusing to install into the guideline source repository\n' >&2
   exit 2
 fi
@@ -213,6 +244,52 @@ if ((has_docker)); then
   add_selected 'guidelines/docker.md'
 fi
 
+ignore_files=(
+  '.cursorignore'
+  '.ignore'
+  '.geminiignore'
+  '.aiderignore'
+  '.continueignore'
+  '.clineignore'
+  '.codeiumignore'
+  '.rooignore'
+  '.aiignore'
+)
+
+if [[ -z "$source_dir" ]]; then
+  if ! command -v curl >/dev/null 2>&1; then
+    printf 'install.sh: curl is required when running without a local guideline checkout\n' >&2
+    exit 2
+  fi
+  source_tmp=$(mktemp -d "${TMPDIR:-/tmp}/ai-guideline-source.XXXXXX")
+  source_dir=$source_tmp
+  repository_ref=${AI_GUIDELINE_REF:-master}
+  remote_base_url=${AI_GUIDELINE_BASE_URL:-"$DEFAULT_REMOTE_ROOT/$repository_ref"}
+  remote_base_url=${remote_base_url%/}
+  case "$remote_base_url" in
+    https://* | file://*) ;;
+    *)
+      printf 'install.sh: AI_GUIDELINE_BASE_URL must use https:// or file://\n' >&2
+      exit 2
+      ;;
+  esac
+
+  for source_rel in "${selected[@]}"; do
+    mkdir -p "$source_dir/$(dirname "$source_rel")"
+    if ! curl -fsSL --retry 3 "$remote_base_url/$source_rel" -o "$source_dir/$source_rel"; then
+      printf 'install.sh: failed to download %s\n' "$source_rel" >&2
+      exit 2
+    fi
+  done
+  if ((!skip_ignore_files)); then
+    mkdir -p "$source_dir/ignores"
+    if ! curl -fsSL --retry 3 "$remote_base_url/ignores/agent.ignore" -o "$source_dir/ignores/agent.ignore"; then
+      printf 'install.sh: failed to download ignores/agent.ignore\n' >&2
+      exit 2
+    fi
+  fi
+fi
+
 destination_for() {
   case "$1" in
     general.md) printf '%s/.agents/general.md\n' "$TARGET" ;;
@@ -251,7 +328,7 @@ is_selected() {
 
 conflicts=()
 for source_rel in "${selected[@]}"; do
-  source_path="$SCRIPT_DIR/$source_rel"
+  source_path="$source_dir/$source_rel"
   destination=$(destination_for "$source_rel")
   if [[ ! -f "$source_path" ]]; then
     printf 'install.sh: guideline source is missing: %s\n' "$source_rel" >&2
@@ -266,22 +343,44 @@ for source_rel in "${selected[@]}"; do
   fi
 done
 
-agents_file="$TARGET/AGENTS.md"
-if [[ -f "$agents_file" ]]; then
-  begin_count=$(grep -Fxc "$BEGIN_MARKER" "$agents_file" || true)
-  end_count=$(grep -Fxc "$END_MARKER" "$agents_file" || true)
+validate_managed_block() {
+  local file=$1
+  local begin_marker=$2
+  local end_marker=$3
+  [[ -f "$file" ]] || return 0
+
+  local begin_count end_count begin_line end_line
+  begin_count=$(grep -Fxc "$begin_marker" "$file" || true)
+  end_count=$(grep -Fxc "$end_marker" "$file" || true)
   if [[ "$begin_count" != "$end_count" || "$begin_count" -gt 1 ]]; then
-    printf 'install.sh: malformed managed block in %s\n' "$agents_file" >&2
+    printf 'install.sh: malformed managed block in %s\n' "$file" >&2
     exit 2
   fi
   if [[ "$begin_count" == 1 ]]; then
-    begin_line=$(grep -Fnx "$BEGIN_MARKER" "$agents_file" | cut -d: -f1)
-    end_line=$(grep -Fnx "$END_MARKER" "$agents_file" | cut -d: -f1)
+    begin_line=$(grep -Fnx "$begin_marker" "$file" | cut -d: -f1)
+    end_line=$(grep -Fnx "$end_marker" "$file" | cut -d: -f1)
     if ((begin_line >= end_line)); then
-      printf 'install.sh: malformed managed block in %s\n' "$agents_file" >&2
+      printf 'install.sh: malformed managed block in %s\n' "$file" >&2
       exit 2
     fi
   fi
+}
+
+agents_file="$TARGET/AGENTS.md"
+validate_managed_block "$agents_file" "$BEGIN_MARKER" "$END_MARKER"
+
+if ((!skip_ignore_files)); then
+  if [[ ! -f "$source_dir/ignores/agent.ignore" ]]; then
+    printf 'install.sh: ignore template source is missing: ignores/agent.ignore\n' >&2
+    exit 2
+  fi
+  validate_managed_block \
+    "$source_dir/ignores/agent.ignore" \
+    "$IGNORE_BEGIN_MARKER" \
+    "$IGNORE_END_MARKER"
+  for ignore_file in "${ignore_files[@]}"; do
+    validate_managed_block "$TARGET/$ignore_file" "$IGNORE_BEGIN_MARKER" "$IGNORE_END_MARKER"
+  done
 fi
 
 if ((${#conflicts[@]})) && ((!force)); then
@@ -292,6 +391,11 @@ if ((${#conflicts[@]})) && ((!force)); then
 fi
 
 printf 'Target: %s\n' "$TARGET"
+if [[ -n "$local_source_dir" ]]; then
+  printf 'Source: local checkout\n'
+else
+  printf 'Source: %s\n' "$remote_base_url"
+fi
 if ((${#detected[@]})); then
   printf 'Detected: '
   for index in "${!detected[@]}"; do
@@ -304,6 +408,10 @@ else
 fi
 printf 'Guidelines:\n'
 printf '  %s\n' "${selected[@]}"
+if ((!skip_ignore_files)); then
+  printf 'Agent ignore files:\n'
+  printf '  %s\n' "${ignore_files[@]}"
+fi
 
 if ((dry_run)); then
   printf 'Dry run: no files changed.\n'
@@ -313,7 +421,7 @@ fi
 mkdir -p "$TARGET/.agents/guidelines"
 
 for source_rel in "${selected[@]}"; do
-  source_path="$SCRIPT_DIR/$source_rel"
+  source_path="$source_dir/$source_rel"
   destination=$(destination_for "$source_rel")
   if [[ ! -f "$destination" ]] || ! cmp -s "$source_path" "$destination"; then
     cp "$source_path" "$destination"
@@ -340,13 +448,11 @@ fi
 
 manifest_tmp=$(mktemp "${TMPDIR:-/tmp}/ai-guideline-manifest.XXXXXX")
 agents_block_tmp=$(mktemp "${TMPDIR:-/tmp}/ai-guideline-block.XXXXXX")
-agents_tmp=$(mktemp "${TMPDIR:-/tmp}/ai-guideline-agents.XXXXXX")
-trap 'rm -f "$manifest_tmp" "$agents_block_tmp" "$agents_tmp"' EXIT
 
 {
   printf '# ai-guideline installer manifest v1\n'
   for source_rel in "${selected[@]}"; do
-    printf '%s %s\n' "$source_rel" "$(sha256_file "$SCRIPT_DIR/$source_rel")"
+    printf '%s %s\n' "$source_rel" "$(sha256_file "$source_dir/$source_rel")"
   done
 } > "$manifest_tmp"
 cat "$manifest_tmp" > "$old_manifest"
@@ -362,8 +468,15 @@ cat "$manifest_tmp" > "$old_manifest"
   printf '%s\n' "$END_MARKER"
 } > "$agents_block_tmp"
 
-if [[ -f "$agents_file" ]] && grep -Fqx "$BEGIN_MARKER" "$agents_file"; then
-  awk -v begin="$BEGIN_MARKER" -v end="$END_MARKER" -v block="$agents_block_tmp" '
+write_managed_block() {
+  local file=$1
+  local block=$2
+  local begin_marker=$3
+  local end_marker=$4
+
+  managed_tmp=$(mktemp "${TMPDIR:-/tmp}/ai-guideline-managed.XXXXXX")
+  if [[ -f "$file" ]] && grep -Fqx "$begin_marker" "$file"; then
+    awk -v begin="$begin_marker" -v end="$end_marker" -v block="$block" '
     $0 == begin {
       while ((getline line < block) > 0) print line
       close(block)
@@ -372,14 +485,29 @@ if [[ -f "$agents_file" ]] && grep -Fqx "$BEGIN_MARKER" "$agents_file"; then
     }
     $0 == end { skipping=0; next }
     !skipping { print }
-  ' "$agents_file" > "$agents_tmp"
-else
-  if [[ -f "$agents_file" && -s "$agents_file" ]]; then
-    cat "$agents_file" > "$agents_tmp"
-    printf '\n' >> "$agents_tmp"
+    ' "$file" > "$managed_tmp"
+  else
+    if [[ -f "$file" && -s "$file" ]]; then
+      cat "$file" > "$managed_tmp"
+      printf '\n' >> "$managed_tmp"
+    fi
+    cat "$block" >> "$managed_tmp"
   fi
-  cat "$agents_block_tmp" >> "$agents_tmp"
+  cat "$managed_tmp" > "$file"
+  rm -f "$managed_tmp"
+  managed_tmp=''
+}
+
+write_managed_block "$agents_file" "$agents_block_tmp" "$BEGIN_MARKER" "$END_MARKER"
+
+if ((!skip_ignore_files)); then
+  for ignore_file in "${ignore_files[@]}"; do
+    write_managed_block \
+      "$TARGET/$ignore_file" \
+      "$source_dir/ignores/agent.ignore" \
+      "$IGNORE_BEGIN_MARKER" \
+      "$IGNORE_END_MARKER"
+  done
 fi
-cat "$agents_tmp" > "$agents_file"
 
 printf 'Installation complete.\n'
