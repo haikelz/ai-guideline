@@ -7,6 +7,12 @@ transactions, migrations, and deployment.
 
 ## Documents
 
+### Project-wide
+
+- [`general.md`](general.md) — repository setup, engineering harness, sources of
+  truth, Git-native planning, authority, documentation, verification, CI,
+  runbooks, and measured process improvement.
+
 ### JavaScript and TypeScript
 
 - [`guidelines/javascript-typescript.md`](guidelines/javascript-typescript.md) —
@@ -25,9 +31,16 @@ transactions, migrations, and deployment.
 - [`guidelines/gorm-postgresql.md`](guidelines/gorm-postgresql.md) — GORM,
   PostgreSQL, repositories, transactions, locking, exact money, and migrations.
 
+### Infrastructure
+
+- [`guidelines/docker.md`](guidelines/docker.md) — reproducible images,
+  multi-stage builds, BuildKit, runtime security, Compose, health checks,
+  migrations, CI delivery, and Kubernetes interoperability.
+
 ## Usage
 
-Provide the relevant document to a coding agent as its baseline. These guidelines
+Use `general.md` as the project-wide baseline, then load only the applicable
+language, framework, persistence, and infrastructure companions. These guidelines
 do not replace repository-local rules. The order of precedence is:
 
 1. The current requirements and acceptance criteria.
