@@ -7,7 +7,9 @@ readonly END_MARKER='<!-- AI-GUIDELINES:END -->'
 readonly IGNORE_BEGIN_MARKER='# AI-GUIDELINES-IGNORE:BEGIN'
 readonly IGNORE_END_MARKER='# AI-GUIDELINES-IGNORE:END'
 readonly MANIFEST_REL='.agents/.ai-guideline-manifest'
+readonly CHECKSUMS_FILE='CHECKSUMS.sha256'
 readonly DEFAULT_REMOTE_ROOT='https://raw.githubusercontent.com/haikelz/ai-guideline'
+readonly INSTALLER_VERSION='1.0.0'
 
 local_source_dir=''
 script_path=${BASH_SOURCE[0]:-}
@@ -35,6 +37,7 @@ trap cleanup EXIT
 dry_run=0
 force=0
 skip_ignore_files=0
+show_version=0
 target_arg='.'
 target_seen=0
 
@@ -48,6 +51,7 @@ Options:
   --dry-run          Print the detected stack and plan without writing.
   --force            Overwrite locally modified installed guidelines.
   --skip-ignore-files Do not create or update coding-agent ignore files.
+  --version          Print the installer version and exit.
   -h, --help         Show this help text.
 
 Installed layout:
@@ -68,6 +72,9 @@ while (($#)); do
       ;;
     --skip-ignore-files)
       skip_ignore_files=1
+      ;;
+    --version)
+      show_version=1
       ;;
     -h | --help)
       usage
@@ -101,12 +108,18 @@ while (($#)); do
   shift
 done
 
+if ((show_version)); then
+  printf 'ai-guideline installer %s\n' "$INSTALLER_VERSION"
+  exit 0
+fi
+
 if [[ ! -d "$target_arg" ]]; then
   printf 'install.sh: target is not a directory: %s\n' "$target_arg" >&2
   exit 2
 fi
 
-readonly TARGET=$(cd "$target_arg" && pwd)
+TARGET=$(cd "$target_arg" && pwd)
+readonly TARGET
 if [[ -n "$local_source_dir" && "$TARGET" == "$local_source_dir" ]]; then
   printf 'install.sh: refusing to install into the guideline source repository\n' >&2
   exit 2
@@ -123,12 +136,31 @@ sha256_file() {
   fi
 }
 
+verify_checksum() {
+  local file=$1
+  local source_rel=$2
+  local checksums=$3
+  local expected actual
+
+  expected=$(awk -v path="$source_rel" '$2 == path { print $1; found=1; exit } END { if (!found) exit 1 }' "$checksums" || true)
+  if ! printf '%s\n' "$expected" | grep -Eq '^[0-9a-f]{64}$'; then
+    printf 'install.sh: no valid checksum for %s\n' "$source_rel" >&2
+    exit 2
+  fi
+
+  actual=$(sha256_file "$file")
+  if [[ "$actual" != "$expected" ]]; then
+    printf 'install.sh: checksum mismatch for %s\n' "$source_rel" >&2
+    exit 2
+  fi
+}
+
 find_project_files() {
   find "$TARGET" \
     \( -type d \( \
-      -name .git -o -name .agents -o -name node_modules -o -name vendor -o \
-      -name dist -o -name build -o -name .next -o -name .astro -o \
-      -name coverage -o -name .cache \
+    -name .git -o -name .agents -o -name node_modules -o -name vendor -o \
+    -name dist -o -name build -o -name .next -o -name .astro -o \
+    -name coverage -o -name .cache \
     \) -prune \) -o "$@"
 }
 
@@ -199,10 +231,10 @@ while IFS= read -r -d '' mod; do
   grep -Eq '(gorm\.io/driver/postgres|github\.com/lib/pq|github\.com/jackc/pgx)' "$mod" && has_postgres=1
 done < <(find_project_files -type f -name go.mod -print0)
 
-if has_file_named 'Dockerfile*' || \
-  has_file_named 'docker-compose*.yml' || \
-  has_file_named 'docker-compose*.yaml' || \
-  has_file_named 'compose*.yml' || \
+if has_file_named 'Dockerfile*' ||
+  has_file_named 'docker-compose*.yml' ||
+  has_file_named 'docker-compose*.yaml' ||
+  has_file_named 'compose*.yml' ||
   has_file_named 'compose*.yaml'; then
   has_docker=1
 fi
@@ -280,12 +312,24 @@ if [[ -z "$source_dir" ]]; then
       ;;
   esac
 
+  for metadata_file in VERSION "$CHECKSUMS_FILE"; do
+    if ! curl -fsSL --retry 3 "$remote_base_url/$metadata_file" -o "$source_dir/$metadata_file"; then
+      printf 'install.sh: failed to download %s\n' "$metadata_file" >&2
+      exit 2
+    fi
+  done
+  verify_checksum "$source_dir/VERSION" 'VERSION' "$source_dir/$CHECKSUMS_FILE"
+  if [[ -n "$script_path" && -f "$script_path" ]]; then
+    verify_checksum "$script_path" 'install.sh' "$source_dir/$CHECKSUMS_FILE"
+  fi
+
   for source_rel in "${selected[@]}"; do
     mkdir -p "$source_dir/$(dirname "$source_rel")"
     if ! curl -fsSL --retry 3 "$remote_base_url/$source_rel" -o "$source_dir/$source_rel"; then
       printf 'install.sh: failed to download %s\n' "$source_rel" >&2
       exit 2
     fi
+    verify_checksum "$source_dir/$source_rel" "$source_rel" "$source_dir/$CHECKSUMS_FILE"
   done
   if ((!skip_ignore_files)); then
     mkdir -p "$source_dir/ignores"
@@ -293,21 +337,36 @@ if [[ -z "$source_dir" ]]; then
       printf 'install.sh: failed to download ignores/agent.ignore\n' >&2
       exit 2
     fi
+    verify_checksum \
+      "$source_dir/ignores/agent.ignore" \
+      'ignores/agent.ignore' \
+      "$source_dir/$CHECKSUMS_FILE"
   fi
+fi
+
+if [[ ! -f "$source_dir/VERSION" ]]; then
+  printf 'install.sh: VERSION is missing from the guideline source\n' >&2
+  exit 2
+fi
+source_version=$(tr -d '\r\n' <"$source_dir/VERSION")
+if [[ "$source_version" != "$INSTALLER_VERSION" ]]; then
+  printf 'install.sh: installer version %s does not match source version %s\n' \
+    "$INSTALLER_VERSION" "$source_version" >&2
+  exit 2
 fi
 
 destination_for() {
   case "$1" in
     general.md) printf '%s/.agents/general.md\n' "$TARGET" ;;
     guidelines/astro.md | \
-    guidelines/docker.md | \
-    guidelines/echo.md | \
-    guidelines/fiber.md | \
-    guidelines/go.md | \
-    guidelines/gorm-postgresql.md | \
-    guidelines/javascript-typescript.md | \
-    guidelines/nestjs.md | \
-    guidelines/nextjs.md)
+      guidelines/docker.md | \
+      guidelines/echo.md | \
+      guidelines/fiber.md | \
+      guidelines/go.md | \
+      guidelines/gorm-postgresql.md | \
+      guidelines/javascript-typescript.md | \
+      guidelines/nestjs.md | \
+      guidelines/nextjs.md)
       printf '%s/.agents/%s\n' "$TARGET" "$1"
       ;;
     *)
@@ -398,6 +457,7 @@ if ((${#conflicts[@]})) && ((!force)); then
 fi
 
 printf 'Target: %s\n' "$TARGET"
+printf 'Version: %s\n' "$source_version"
 if [[ -n "$local_source_dir" ]]; then
   printf 'Source: local checkout\n'
 else
@@ -450,7 +510,7 @@ if [[ -f "$old_manifest" ]]; then
         printf 'Preserved locally modified stale guideline: %s\n' "${stale_destination#"$TARGET/"}" >&2
       fi
     fi
-  done < "$old_manifest"
+  done <"$old_manifest"
 fi
 
 manifest_tmp=$(mktemp "${TMPDIR:-/tmp}/ai-guideline-manifest.XXXXXX")
@@ -461,19 +521,19 @@ agents_block_tmp=$(mktemp "${TMPDIR:-/tmp}/ai-guideline-block.XXXXXX")
   for source_rel in "${selected[@]}"; do
     printf '%s %s\n' "$source_rel" "$(sha256_file "$source_dir/$source_rel")"
   done
-} > "$manifest_tmp"
-cat "$manifest_tmp" > "$old_manifest"
+} >"$manifest_tmp"
+cat "$manifest_tmp" >"$old_manifest"
 
 {
   printf '%s\n' "$BEGIN_MARKER"
   printf '## AI Engineering Guidelines\n\n'
-  printf 'Read `.agents/general.md` for every task. Read only the applicable companion guidelines below; repository-local contracts and instructions remain authoritative.\n\n'
+  printf '%s\n\n' "Read \`.agents/general.md\` for every task. Read only the applicable companion guidelines below; repository-local contracts and instructions remain authoritative."
   for source_rel in "${selected[@]}"; do
     [[ "$source_rel" == 'general.md' ]] && continue
-    printf -- '- `.agents/%s`\n' "$source_rel"
+    printf -- "- \`%s\`\n" ".agents/$source_rel"
   done
   printf '%s\n' "$END_MARKER"
-} > "$agents_block_tmp"
+} >"$agents_block_tmp"
 
 write_managed_block() {
   local file=$1
@@ -492,15 +552,15 @@ write_managed_block() {
     }
     $0 == end { skipping=0; next }
     !skipping { print }
-    ' "$file" > "$managed_tmp"
+    ' "$file" >"$managed_tmp"
   else
     if [[ -f "$file" && -s "$file" ]]; then
-      cat "$file" > "$managed_tmp"
-      printf '\n' >> "$managed_tmp"
+      cat "$file" >"$managed_tmp"
+      printf '\n' >>"$managed_tmp"
     fi
-    cat "$block" >> "$managed_tmp"
+    cat "$block" >>"$managed_tmp"
   fi
-  cat "$managed_tmp" > "$file"
+  cat "$managed_tmp" >"$file"
   rm -f "$managed_tmp"
   managed_tmp=''
 }

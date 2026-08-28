@@ -1,0 +1,12 @@
+{
+  "config": {
+    // Go examples retain the hard tabs produced by gofmt.
+    "MD010": false,
+    "MD013": false,
+    "MD024": false,
+    "MD033": false
+  },
+  "ignores": [
+    ".agents/**"
+  ]
+}

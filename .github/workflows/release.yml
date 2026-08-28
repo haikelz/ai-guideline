@@ -1,0 +1,61 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install shell tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes shellcheck
+          go install mvdan.cc/sh/v3/cmd/shfmt@v3.10.0
+
+      - name: Validate tag and source
+        run: |
+          version=$(cat VERSION)
+          test "$GITHUB_REF_NAME" = "v$version"
+          bash -n install.sh tests/install.sh scripts/*.sh
+          shellcheck install.sh tests/install.sh scripts/*.sh
+          shfmt -d -i 2 -ci install.sh tests/install.sh scripts/*.sh
+          ./scripts/generate-checksums.sh --check
+          python3 scripts/validate-guidelines.py
+          npx --yes markdownlint-cli2@0.18.1 '**/*.md'
+          ./tests/install.sh
+
+      - name: Build reproducible source archive
+        run: |
+          version=$(cat VERSION)
+          archive="ai-guideline-$version.tar.gz"
+          git archive \
+            --format=tar.gz \
+            --prefix="ai-guideline-$version/" \
+            --output="$archive" \
+            HEAD
+          sha256sum "$archive" > "$archive.sha256"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(cat VERSION)
+          archive="ai-guideline-$version.tar.gz"
+          gh release create "$GITHUB_REF_NAME" \
+            "$archive" \
+            "$archive.sha256" \
+            CHECKSUMS.sha256 \
+            --generate-notes \
+            --title "$GITHUB_REF_NAME" \
+            --verify-tag

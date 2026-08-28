@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-linux:
+    name: Validate on Linux
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install shell tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes shellcheck
+          go install mvdan.cc/sh/v3/cmd/shfmt@v3.10.0
+
+      - name: Validate shell
+        run: |
+          bash -n install.sh tests/install.sh scripts/*.sh
+          shellcheck install.sh tests/install.sh scripts/*.sh
+          shfmt -d -i 2 -ci install.sh tests/install.sh scripts/*.sh
+
+      - name: Validate repository contracts
+        run: |
+          ./scripts/generate-checksums.sh --check
+          python3 scripts/validate-guidelines.py
+          npx --yes markdownlint-cli2@0.18.1 '**/*.md'
+
+      - name: Test installer
+        run: ./tests/install.sh
+
+  validate-macos:
+    name: Validate on macOS Bash 3.2
+    runs-on: macos-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Show Bash version
+        run: /bin/bash --version | head -n 1
+
+      - name: Validate and test
+        shell: /bin/bash {0}
+        run: |
+          bash -n install.sh tests/install.sh scripts/*.sh
+          ./scripts/generate-checksums.sh --check
+          python3 scripts/validate-guidelines.py
+          ./tests/install.sh

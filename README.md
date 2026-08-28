@@ -14,6 +14,9 @@ transactions, migrations, and deployment.
   runbooks, and measured process improvement.
 - [`ignores/README.md`](ignores/README.md) — supported coding-agent ignore files,
   shared exclusions, tool mappings, and security limitations.
+- [`CHANGELOG.md`](CHANGELOG.md) — version history and notable behavior changes.
+- [`RELEASING.md`](RELEASING.md) — versioning, validation, tagging, and release
+  procedure.
 
 ### JavaScript and TypeScript
 
@@ -106,8 +109,18 @@ bash /tmp/ai-guideline-install.sh .
 rm /tmp/ai-guideline-install.sh
 ```
 
+The installer reports its embedded version with `./install.sh --version`. Remote
+mode downloads `VERSION` and `CHECKSUMS.sha256`, verifies every selected
+guideline and ignore template before writing to the target, and rejects an
+installer/source version mismatch. A downloaded installer also verifies its own
+checksum. A piped script cannot verify itself before execution, and checksums
+from the same source provide integrity rather than source authenticity. For
+automation, prefer an immutable reviewed tag and verify the downloaded script
+before running it.
+
 `AI_GUIDELINE_BASE_URL` can point the downloaded installer at another HTTPS raw
-content mirror. `AI_GUIDELINE_REF` defaults to `master`.
+content mirror. `AI_GUIDELINE_REF` defaults to the moving `master` branch; set it
+to an immutable release tag or full commit SHA for reproducible installation.
 
 The installer writes this project-local layout:
 
@@ -223,6 +236,14 @@ Next.js guideline. Astro work uses the language guideline plus the Astro
 guideline. An Echo or Fiber service uses the Go guideline plus its HTTP framework
 companion; add the GORM and PostgreSQL companion when that persistence stack is
 present. Do not load unrelated framework documents merely because they exist.
+
+## Releases
+
+The current release is recorded in [`VERSION`](VERSION). Release payload hashes
+are published in [`CHECKSUMS.sha256`](CHECKSUMS.sha256), and Linux plus macOS CI
+validates shell portability, repository contracts, Markdown, checksums, and the
+installer suite. See the [release process](RELEASING.md) before changing a
+version or publishing a tag.
 
 ## Core Principles
 
