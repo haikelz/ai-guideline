@@ -163,6 +163,7 @@ has_next=0
 has_nest=0
 has_go=0
 has_echo=0
+has_fiber=0
 has_gorm=0
 has_postgres=0
 has_docker=0
@@ -193,6 +194,7 @@ fi
 while IFS= read -r -d '' mod; do
   has_go=1
   grep -Eq 'github\.com/labstack/echo(/v[0-9]+)?([[:space:]]|$)' "$mod" && has_echo=1
+  grep -Eq 'github\.com/gofiber/fiber(/v[0-9]+)?([[:space:]]|$)' "$mod" && has_fiber=1
   grep -Eq 'gorm\.io/gorm([[:space:]]|$)' "$mod" && has_gorm=1
   grep -Eq '(gorm\.io/driver/postgres|github\.com/lib/pq|github\.com/jackc/pgx)' "$mod" && has_postgres=1
 done < <(find_project_files -type f -name go.mod -print0)
@@ -234,6 +236,10 @@ fi
 if ((has_echo)); then
   add_detected 'echo'
   add_selected 'guidelines/echo.md'
+fi
+if ((has_fiber)); then
+  add_detected 'fiber'
+  add_selected 'guidelines/fiber.md'
 fi
 if ((has_gorm && has_postgres)); then
   add_detected 'gorm-postgresql'
@@ -296,6 +302,7 @@ destination_for() {
     guidelines/astro.md | \
     guidelines/docker.md | \
     guidelines/echo.md | \
+    guidelines/fiber.md | \
     guidelines/go.md | \
     guidelines/gorm-postgresql.md | \
     guidelines/javascript-typescript.md | \

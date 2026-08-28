@@ -127,6 +127,22 @@ assert_file "$go_app/.agents/guidelines/gorm-postgresql.md"
 assert_file "$go_app/.agents/guidelines/docker.md"
 assert_no_file "$go_app/.agents/guidelines/javascript-typescript.md"
 
+fiber_app="$work/fiber-app"
+mkdir -p "$fiber_app"
+cat > "$fiber_app/go.mod" <<'MOD'
+module example.test/fiber-service
+
+go 1.24
+
+require github.com/gofiber/fiber/v2 v2.52.9
+MOD
+"$INSTALLER" "$fiber_app" >/dev/null
+assert_file "$fiber_app/.agents/guidelines/go.md"
+assert_file "$fiber_app/.agents/guidelines/fiber.md"
+assert_file "$fiber_app/.agents/guidelines/docker.md"
+assert_no_file "$fiber_app/.agents/guidelines/echo.md"
+assert_no_file "$fiber_app/.agents/guidelines/gorm-postgresql.md"
+
 typescript="$work/typescript-library"
 mkdir -p "$typescript"
 printf '{"private":true,"devDependencies":{"typescript":"6.0.0"}}\n' > "$typescript/package.json"

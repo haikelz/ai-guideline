@@ -33,6 +33,9 @@ transactions, migrations, and deployment.
 - [`guidelines/go.md`](guidelines/go.md) — language-level Go rules.
 - [`guidelines/echo.md`](guidelines/echo.md) — Echo routing, middleware, HTTP
   boundaries, authentication, security, and lifecycle.
+- [`guidelines/fiber.md`](guidelines/fiber.md) — Fiber app construction, routing,
+  middleware, request lifetime, HTTP contracts, security, testing, and graceful
+  shutdown.
 - [`guidelines/gorm-postgresql.md`](guidelines/gorm-postgresql.md) — GORM,
   PostgreSQL, repositories, transactions, locking, exact money, and migrations.
 
@@ -187,6 +190,7 @@ terminal or plugin tools.
 | NestJS dependency or `nest-cli.json` | JavaScript and TypeScript, NestJS, Docker |
 | `go.mod` | Go, Docker |
 | Echo module in `go.mod` | Echo, in addition to Go |
+| Fiber module in `go.mod` | Fiber, in addition to Go |
 | GORM plus a PostgreSQL driver in `go.mod` | GORM and PostgreSQL, in addition to Go |
 | Dockerfile or Compose file | Docker |
 
@@ -216,8 +220,9 @@ code uniform.
 For framework work, load both the language guideline and the relevant companion.
 For example, Next.js work uses the JavaScript and TypeScript guideline plus the
 Next.js guideline. Astro work uses the language guideline plus the Astro
-guideline. An Echo service backed by GORM and PostgreSQL uses all three Go
-documents. Do not load unrelated framework documents merely because they exist.
+guideline. An Echo or Fiber service uses the Go guideline plus its HTTP framework
+companion; add the GORM and PostgreSQL companion when that persistence stack is
+present. Do not load unrelated framework documents merely because they exist.
 
 ## Core Principles
 
