@@ -22,22 +22,22 @@ assert_no_file() {
 }
 
 assert_contains() {
-  grep -Fq "$2" "$1" || fail "$1 does not contain: $2"
+  grep -Fq -- "$2" "$1" || fail "$1 does not contain: $2"
 }
 
 assert_line() {
-  grep -Fxq "$2" "$1" || fail "$1 does not contain exact line: $2"
+  grep -Fxq -- "$2" "$1" || fail "$1 does not contain exact line: $2"
 }
 
 assert_not_contains() {
-  if grep -Fq "$2" "$1"; then
+  if grep -Fq -- "$2" "$1"; then
     fail "$1 unexpectedly contains: $2"
   fi
 }
 
 assert_count() {
   local actual
-  actual=$(grep -Fc "$2" "$1" || true)
+  actual=$(grep -Fc -- "$2" "$1" || true)
   [[ "$actual" == "$3" ]] || fail "$1 contains '$2' $actual times; expected $3"
 }
 
@@ -69,6 +69,10 @@ assert_file "$next/.agents/guidelines/docker.md"
 assert_no_file "$next/.agents/guidelines/nestjs.md"
 assert_contains "$next/AGENTS.md" '# Existing instructions'
 assert_count "$next/AGENTS.md" '<!-- AI-GUIDELINES:BEGIN -->' 1
+assert_contains "$next/AGENTS.md" 'select the smallest matching context profile'
+assert_contains "$next/AGENTS.md" 'Do not read every installed companion by default.'
+assert_contains "$next/AGENTS.md" "- **Next.js UI or application work:** \`.agents/guidelines/javascript-typescript.md\` and \`.agents/guidelines/nextjs.md\`."
+assert_not_contains "$next/AGENTS.md" 'NestJS API or service work'
 for ignore_file in \
   .cursorignore .ignore .geminiignore .aiderignore .continueignore \
   .clineignore .codeiumignore .rooignore .aiignore; do
@@ -105,6 +109,7 @@ printf '{"private":true,"devDependencies":{"typescript":"6.0.0"}}\n' >"$next/pac
 assert_no_file "$next/.agents/guidelines/nextjs.md"
 assert_no_file "$next/.agents/guidelines/docker.md"
 assert_not_contains "$next/AGENTS.md" '.agents/guidelines/nextjs.md'
+assert_not_contains "$next/AGENTS.md" 'Next.js UI or application work'
 assert_count "$next/AGENTS.md" '<!-- AI-GUIDELINES:BEGIN -->' 1
 
 go_app="$work/go-app"
@@ -126,6 +131,9 @@ assert_file "$go_app/.agents/guidelines/echo.md"
 assert_file "$go_app/.agents/guidelines/gorm-postgresql.md"
 assert_file "$go_app/.agents/guidelines/docker.md"
 assert_no_file "$go_app/.agents/guidelines/javascript-typescript.md"
+assert_contains "$go_app/AGENTS.md" "- **Echo HTTP work:** \`.agents/guidelines/go.md\` and \`.agents/guidelines/echo.md\`."
+assert_contains "$go_app/AGENTS.md" '- **GORM or PostgreSQL persistence work:'
+assert_contains "$go_app/AGENTS.md" '- **Container, Compose, delivery, or runtime work:'
 
 fiber_app="$work/fiber-app"
 mkdir -p "$fiber_app"
@@ -142,6 +150,8 @@ assert_file "$fiber_app/.agents/guidelines/fiber.md"
 assert_file "$fiber_app/.agents/guidelines/docker.md"
 assert_no_file "$fiber_app/.agents/guidelines/echo.md"
 assert_no_file "$fiber_app/.agents/guidelines/gorm-postgresql.md"
+assert_contains "$fiber_app/AGENTS.md" "- **Fiber HTTP work:** \`.agents/guidelines/go.md\` and \`.agents/guidelines/fiber.md\`."
+assert_not_contains "$fiber_app/AGENTS.md" 'Echo HTTP work'
 
 typescript="$work/typescript-library"
 mkdir -p "$typescript"

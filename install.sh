@@ -9,7 +9,7 @@ readonly IGNORE_END_MARKER='# AI-GUIDELINES-IGNORE:END'
 readonly MANIFEST_REL='.agents/.ai-guideline-manifest'
 readonly CHECKSUMS_FILE='CHECKSUMS.sha256'
 readonly DEFAULT_REMOTE_ROOT='https://raw.githubusercontent.com/haikelz/ai-guideline'
-readonly INSTALLER_VERSION='1.0.0'
+readonly INSTALLER_VERSION='1.1.0'
 
 local_source_dir=''
 script_path=${BASH_SOURCE[0]:-}
@@ -527,11 +527,36 @@ cat "$manifest_tmp" >"$old_manifest"
 {
   printf '%s\n' "$BEGIN_MARKER"
   printf '## AI Engineering Guidelines\n\n'
-  printf '%s\n\n' "Read \`.agents/general.md\` for every task. Read only the applicable companion guidelines below; repository-local contracts and instructions remain authoritative."
-  for source_rel in "${selected[@]}"; do
-    [[ "$source_rel" == 'general.md' ]] && continue
-    printf -- "- \`%s\`\n" ".agents/$source_rel"
-  done
+  printf '%s\n\n' "Read \`.agents/general.md\` for every task. Then select the smallest matching context profile below. Do not read every installed companion by default. Repository-local contracts and instructions remain authoritative."
+  printf '%s\n' '- **Repository setup, documentation, planning, or process:** no companion guideline.'
+  if ((has_javascript)); then
+    printf '%s\n' "- **JavaScript or TypeScript language/library work:** \`.agents/guidelines/javascript-typescript.md\`."
+  fi
+  if ((has_astro)); then
+    printf '%s\n' "- **Astro UI or application work:** \`.agents/guidelines/javascript-typescript.md\` and \`.agents/guidelines/astro.md\`."
+  fi
+  if ((has_next)); then
+    printf '%s\n' "- **Next.js UI or application work:** \`.agents/guidelines/javascript-typescript.md\` and \`.agents/guidelines/nextjs.md\`."
+  fi
+  if ((has_nest)); then
+    printf '%s\n' "- **NestJS API or service work:** \`.agents/guidelines/javascript-typescript.md\` and \`.agents/guidelines/nestjs.md\`."
+  fi
+  if ((has_go)); then
+    printf '%s\n' "- **Go language, package, or service work:** \`.agents/guidelines/go.md\`."
+  fi
+  if ((has_echo)); then
+    printf '%s\n' "- **Echo HTTP work:** \`.agents/guidelines/go.md\` and \`.agents/guidelines/echo.md\`."
+  fi
+  if ((has_fiber)); then
+    printf '%s\n' "- **Fiber HTTP work:** \`.agents/guidelines/go.md\` and \`.agents/guidelines/fiber.md\`."
+  fi
+  if ((has_gorm && has_postgres)); then
+    printf '%s\n' "- **GORM or PostgreSQL persistence work:** \`.agents/guidelines/go.md\` and \`.agents/guidelines/gorm-postgresql.md\`; add the applicable HTTP profile only when transport behavior also changes."
+  fi
+  if ((has_docker)); then
+    printf '%s\n' "- **Container, Compose, delivery, or runtime work:** \`.agents/guidelines/docker.md\`; add an application profile only when its build or runtime behavior also changes."
+  fi
+  printf '%s\n' '- **Cross-cutting work:** use the union of only the affected profiles and state why each additional document is needed.'
   printf '%s\n' "$END_MARKER"
 } >"$agents_block_tmp"
 

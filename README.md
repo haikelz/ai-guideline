@@ -152,6 +152,21 @@ preserved:
 <!-- AI-GUIDELINES:END -->
 ```
 
+### Context profiles
+
+The managed `AGENTS.md` block composes task-oriented context profiles from the
+detected stack. Every task reads `general.md`, then loads only the smallest
+matching companion set. For example, a repository containing a Next.js app and
+Docker configuration receives separate profiles for JavaScript or TypeScript,
+Next.js application work, and container or delivery work. A UI-only task does
+not load the Docker guideline, and a Docker-only task does not load the Next.js
+guideline.
+
+Profiles are navigational pointers, not copies of policy. Cross-cutting work uses
+the union of only the affected profiles. This keeps agent context focused while
+preserving one source of truth for each language, framework, persistence, or
+infrastructure rule.
+
 The manifest records installed content hashes. On later runs, files that still
 match their previous installed hash update automatically, and obsolete
 unmodified guidelines are removed. A locally modified installed guideline is

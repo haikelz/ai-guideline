@@ -5,6 +5,13 @@ All notable changes to this project are documented here. Releases follow
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-08-28
+
+### Added
+
+- Task-oriented context profiles composed from each detected project stack.
+- Minimal companion loading instructions for single-area and cross-cutting work.
+
 ## [1.0.0] - 2026-08-28
 
 ### Added
@@ -19,5 +26,6 @@ All notable changes to this project are documented here. Releases follow
 - Linux and macOS continuous-integration validation.
 - Reproducible tagged-release archive workflow.
 
-[Unreleased]: https://github.com/haikelz/ai-guideline/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/haikelz/ai-guideline/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/haikelz/ai-guideline/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/haikelz/ai-guideline/releases/tag/v1.0.0
