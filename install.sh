@@ -7,6 +7,8 @@ readonly END_MARKER='<!-- AI-GUIDELINES:END -->'
 readonly IGNORE_BEGIN_MARKER='# AI-GUIDELINES-IGNORE:BEGIN'
 readonly IGNORE_END_MARKER='# AI-GUIDELINES-IGNORE:END'
 readonly MANIFEST_REL='.agents/.ai-guideline-manifest'
+readonly WORKSPACE_STATE_REL='.agents/.ai-guideline-workspaces'
+readonly OVERRIDE_CONFIG='.ai-guideline.conf'
 readonly CHECKSUMS_FILE='CHECKSUMS.sha256'
 readonly DEFAULT_REMOTE_ROOT='https://raw.githubusercontent.com/haikelz/ai-guideline'
 readonly INSTALLER_VERSION='1.1.0'
@@ -25,12 +27,16 @@ source_tmp=''
 manifest_tmp=''
 agents_block_tmp=''
 managed_tmp=''
+workspace_block_tmp=''
+workspace_state_tmp=''
 
 cleanup() {
   [[ -z "$source_tmp" ]] || rm -rf "$source_tmp"
   [[ -z "$manifest_tmp" ]] || rm -f "$manifest_tmp"
   [[ -z "$agents_block_tmp" ]] || rm -f "$agents_block_tmp"
   [[ -z "$managed_tmp" ]] || rm -f "$managed_tmp"
+  [[ -z "$workspace_block_tmp" ]] || rm -f "$workspace_block_tmp"
+  [[ -z "$workspace_state_tmp" ]] || rm -f "$workspace_state_tmp"
 }
 trap cleanup EXIT
 
@@ -38,6 +44,11 @@ dry_run=0
 force=0
 skip_ignore_files=0
 show_version=0
+explain=0
+workspace_instructions=0
+workspace_arg=''
+include_args=()
+exclude_args=()
 target_arg='.'
 target_seen=0
 
@@ -49,8 +60,14 @@ Detect a project's stack and install the applicable coding-agent guidelines.
 
 Options:
   --dry-run          Print the detected stack and plan without writing.
+  --explain          Explain detection evidence without writing.
   --force            Overwrite locally modified installed guidelines.
+  --include STACK    Include a supported stack; may be repeated.
+  --exclude STACK    Exclude a supported stack; may be repeated.
   --skip-ignore-files Do not create or update coding-agent ignore files.
+  --workspace PATH   Install only for one workspace below the target root.
+  --workspace-instructions
+                     Manage scoped AGENTS.md blocks in detected workspaces.
   --version          Print the installer version and exit.
   -h, --help         Show this help text.
 
@@ -67,11 +84,44 @@ while (($#)); do
     --dry-run)
       dry_run=1
       ;;
+    --explain)
+      explain=1
+      dry_run=1
+      ;;
     --force)
       force=1
       ;;
+    --include | --exclude | --workspace)
+      option=$1
+      if (($# < 2)); then
+        printf 'install.sh: %s requires a value\n' "$option" >&2
+        exit 2
+      fi
+      shift
+      case "$option" in
+        --include) include_args+=("$1") ;;
+        --exclude) exclude_args+=("$1") ;;
+        --workspace) workspace_arg=$1 ;;
+      esac
+      ;;
+    --include=* | --exclude=* | --workspace=*)
+      option=${1%%=*}
+      value=${1#*=}
+      if [[ -z "$value" ]]; then
+        printf 'install.sh: %s requires a value\n' "$option" >&2
+        exit 2
+      fi
+      case "$option" in
+        --include) include_args+=("$value") ;;
+        --exclude) exclude_args+=("$value") ;;
+        --workspace) workspace_arg=$value ;;
+      esac
+      ;;
     --skip-ignore-files)
       skip_ignore_files=1
+      ;;
+    --workspace-instructions)
+      workspace_instructions=1
       ;;
     --version)
       show_version=1
@@ -118,8 +168,33 @@ if [[ ! -d "$target_arg" ]]; then
   exit 2
 fi
 
-TARGET=$(cd "$target_arg" && pwd)
-readonly TARGET
+REPOSITORY_ROOT=$(cd "$target_arg" && pwd)
+TARGET=$REPOSITORY_ROOT
+if [[ -n "$workspace_arg" ]]; then
+  if ((workspace_instructions)); then
+    printf 'install.sh: --workspace and --workspace-instructions cannot be combined\n' >&2
+    exit 2
+  fi
+  case "/$workspace_arg/" in
+    */../* | */./* | *//*)
+      printf 'install.sh: workspace path must be a normalized relative path: %s\n' "$workspace_arg" >&2
+      exit 2
+      ;;
+  esac
+  if [[ ! -d "$REPOSITORY_ROOT/$workspace_arg" ]]; then
+    printf 'install.sh: workspace is not a directory below the target: %s\n' "$workspace_arg" >&2
+    exit 2
+  fi
+  TARGET=$(cd "$REPOSITORY_ROOT/$workspace_arg" && pwd)
+  case "$TARGET/" in
+    "$REPOSITORY_ROOT/"*) ;;
+    *)
+      printf 'install.sh: workspace resolves outside the target: %s\n' "$workspace_arg" >&2
+      exit 2
+      ;;
+  esac
+fi
+readonly REPOSITORY_ROOT TARGET
 if [[ -n "$local_source_dir" && "$TARGET" == "$local_source_dir" ]]; then
   printf 'install.sh: refusing to install into the guideline source repository\n' >&2
   exit 2
@@ -160,124 +235,344 @@ find_project_files() {
     \( -type d \( \
     -name .git -o -name .agents -o -name node_modules -o -name vendor -o \
     -name dist -o -name build -o -name .next -o -name .astro -o \
-    -name coverage -o -name .cache \
+    -name .nx -o -name .turbo -o -name .vercel -o -name .output -o \
+    -name .nuxt -o -name .svelte-kit -o -name .yarn -o \
+    -name .pnpm-store -o -name coverage -o -name .cache \
     \) -prune \) -o "$@"
 }
 
-has_file_named() {
-  [[ -n $(find_project_files -type f -name "$1" -print -quit) ]]
+contains_word() {
+  local words=$1
+  local candidate=$2
+  [[ " $words " == *" $candidate "* ]]
 }
 
-selected=()
-detected=()
+array_contains() {
+  local candidate=$1
+  shift
+  local item
+  for item in "$@"; do
+    [[ "$item" == "$candidate" ]] && return 0
+  done
+  return 1
+}
 
+relative_to_target() {
+  local path=$1
+  if [[ "$path" == "$TARGET" ]]; then
+    printf '.\n'
+  else
+    printf '%s\n' "${path#"$TARGET/"}"
+  fi
+}
+
+relative_file() {
+  local path=$1
+  printf '%s\n' "${path#"$TARGET/"}"
+}
+
+workspace_paths=()
+workspace_stacks=()
+evidence_workspaces=()
+evidence_stacks=()
+evidence_sources=()
+monorepo_markers=()
+
+workspace_index() {
+  local path=$1
+  local index
+  for index in "${!workspace_paths[@]}"; do
+    if [[ "${workspace_paths[$index]}" == "$path" ]]; then
+      printf '%s\n' "$index"
+      return 0
+    fi
+  done
+  return 1
+}
+
+add_evidence() {
+  local workspace=$1
+  local stack=$2
+  local source=$3
+  local index
+  for index in "${!evidence_sources[@]}"; do
+    if [[ "${evidence_workspaces[$index]}" == "$workspace" &&
+      "${evidence_stacks[$index]}" == "$stack" &&
+      "${evidence_sources[$index]}" == "$source" ]]; then
+      return
+    fi
+  done
+  evidence_workspaces+=("$workspace")
+  evidence_stacks+=("$stack")
+  evidence_sources+=("$source")
+}
+
+add_workspace_stack() {
+  local workspace=$1
+  local stack=$2
+  local source=$3
+  local index
+  case "$workspace" in
+    *$'\n'* | *$'\t'* | *'`'*)
+      printf 'install.sh: workspace path contains an unsupported control or Markdown character: %s\n' "$workspace" >&2
+      exit 2
+      ;;
+  esac
+  index=$(workspace_index "$workspace" || true)
+  if [[ -z "$index" ]]; then
+    workspace_paths+=("$workspace")
+    workspace_stacks+=("$stack")
+  elif ! contains_word "${workspace_stacks[$index]}" "$stack"; then
+    workspace_stacks[index]="${workspace_stacks[index]} $stack"
+  fi
+  add_evidence "$workspace" "$stack" "$source"
+}
+
+remove_workspace_stack() {
+  local stack=$1
+  local index word remaining
+  for index in "${!workspace_stacks[@]}"; do
+    remaining=''
+    for word in ${workspace_stacks[$index]}; do
+      [[ "$word" == "$stack" ]] || remaining="${remaining:+$remaining }$word"
+    done
+    workspace_stacks[index]=$remaining
+  done
+}
+
+valid_stack() {
+  case "$1" in
+    javascript-typescript | astro | nextjs | nestjs | go | echo | fiber | gorm-postgresql | docker) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+add_javascript_config() {
+  local file=$1
+  local stack=${2:-}
+  local workspace source
+  workspace=$(relative_to_target "$(dirname "$file")")
+  source=$(relative_file "$file")
+  add_workspace_stack "$workspace" 'javascript-typescript' "$source"
+  if [[ -n "$stack" ]]; then
+    add_workspace_stack "$workspace" "$stack" "$source"
+    add_workspace_stack "$workspace" 'docker' "$source (runtime companion)"
+  fi
+}
+
+while IFS= read -r -d '' project_file; do
+  file_name=${project_file##*/}
+  workspace=$(relative_to_target "$(dirname "$project_file")")
+  source=$(relative_file "$project_file")
+  case "$file_name" in
+    package.json)
+      add_workspace_stack "$workspace" 'javascript-typescript' "$source"
+      if grep -Eq '"workspaces"[[:space:]]*:' "$project_file"; then
+        monorepo_markers+=("$source")
+      fi
+      if grep -Eq '"astro"[[:space:]]*:' "$project_file"; then
+        add_workspace_stack "$workspace" 'astro' "$source"
+        add_workspace_stack "$workspace" 'docker' "$source (runtime companion)"
+      fi
+      if grep -Eq '"next"[[:space:]]*:' "$project_file"; then
+        add_workspace_stack "$workspace" 'nextjs' "$source"
+        add_workspace_stack "$workspace" 'docker' "$source (runtime companion)"
+      fi
+      if grep -Eq '"@nestjs/core"[[:space:]]*:' "$project_file"; then
+        add_workspace_stack "$workspace" 'nestjs' "$source"
+        add_workspace_stack "$workspace" 'docker' "$source (runtime companion)"
+      fi
+      ;;
+    project.json)
+      add_workspace_stack "$workspace" 'javascript-typescript' "$source"
+      if grep -Eq '(@nx/next|next:)' "$project_file"; then
+        add_workspace_stack "$workspace" 'nextjs' "$source"
+        add_workspace_stack "$workspace" 'docker' "$source (runtime companion)"
+      fi
+      if grep -Eq '(@nx/nest|nestjs)' "$project_file"; then
+        add_workspace_stack "$workspace" 'nestjs' "$source"
+        add_workspace_stack "$workspace" 'docker' "$source (runtime companion)"
+      fi
+      ;;
+    tsconfig.json | jsconfig.json) add_javascript_config "$project_file" ;;
+    astro.config.*) add_javascript_config "$project_file" 'astro' ;;
+    next.config.*) add_javascript_config "$project_file" 'nextjs' ;;
+    nest-cli.json) add_javascript_config "$project_file" 'nestjs' ;;
+    go.mod)
+      add_workspace_stack "$workspace" 'go' "$source"
+      add_workspace_stack "$workspace" 'docker' "$source (runtime companion)"
+      grep -Eq 'github\.com/labstack/echo(/v[0-9]+)?([[:space:]]|$)' "$project_file" &&
+        add_workspace_stack "$workspace" 'echo' "$source"
+      grep -Eq 'github\.com/gofiber/fiber(/v[0-9]+)?([[:space:]]|$)' "$project_file" &&
+        add_workspace_stack "$workspace" 'fiber' "$source"
+      has_local_gorm=0
+      has_local_postgres=0
+      grep -Eq 'gorm\.io/gorm([[:space:]]|$)' "$project_file" && has_local_gorm=1
+      grep -Eq '(gorm\.io/driver/postgres|github\.com/lib/pq|github\.com/jackc/pgx)' "$project_file" && has_local_postgres=1
+      if ((has_local_gorm && has_local_postgres)); then
+        add_workspace_stack "$workspace" 'gorm-postgresql' "$source"
+      fi
+      ;;
+    Dockerfile* | docker-compose*.yml | docker-compose*.yaml | compose*.yml | compose*.yaml)
+      add_workspace_stack "$workspace" 'docker' "$source"
+      ;;
+    go.work | pnpm-workspace.yaml | nx.json | workspace.json | turbo.json | lerna.json)
+      monorepo_markers+=("$source")
+      ;;
+  esac
+done < <(find_project_files -type f \( \
+  -name package.json -o \
+  -name project.json -o \
+  -name tsconfig.json -o \
+  -name jsconfig.json -o \
+  -name 'astro.config.*' -o \
+  -name 'next.config.*' -o \
+  -name nest-cli.json -o \
+  -name go.mod -o \
+  -name 'Dockerfile*' -o \
+  -name 'docker-compose*.yml' -o \
+  -name 'docker-compose*.yaml' -o \
+  -name 'compose*.yml' -o \
+  -name 'compose*.yaml' -o \
+  -name go.work -o \
+  -name pnpm-workspace.yaml -o \
+  -name nx.json -o \
+  -name workspace.json -o \
+  -name turbo.json -o \
+  -name lerna.json \
+  \) -print0)
+
+if [[ -f "$REPOSITORY_ROOT/$OVERRIDE_CONFIG" ]]; then
+  config_line=0
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    config_line=$((config_line + 1))
+    line=${line%$'\r'}
+    read -r directive stack extra <<<"$line"
+    [[ -z "${directive:-}" || "$directive" == \#* ]] && continue
+    if [[ -n "${extra:-}" || ("$directive" != 'include' && "$directive" != 'exclude') || -z "${stack:-}" ]]; then
+      printf 'install.sh: invalid %s line %s; expected "include STACK" or "exclude STACK"\n' \
+        "$OVERRIDE_CONFIG" "$config_line" >&2
+      exit 2
+    fi
+    if [[ "$directive" == 'include' ]]; then
+      include_args+=("$stack")
+    else
+      exclude_args+=("$stack")
+    fi
+  done <"$REPOSITORY_ROOT/$OVERRIDE_CONFIG"
+fi
+
+for stack in "${include_args[@]:-}" "${exclude_args[@]:-}"; do
+  [[ -z "$stack" ]] && continue
+  if ! valid_stack "$stack"; then
+    printf 'install.sh: unsupported stack override: %s\n' "$stack" >&2
+    exit 2
+  fi
+done
+for stack in "${include_args[@]:-}"; do
+  [[ -z "$stack" ]] && continue
+  if array_contains "$stack" "${exclude_args[@]:-}"; then
+    printf 'install.sh: stack cannot be both included and excluded: %s\n' "$stack" >&2
+    exit 2
+  fi
+  case "$stack" in
+    astro | nextjs | nestjs)
+      add_workspace_stack '.' 'javascript-typescript' "explicit include: $stack"
+      add_workspace_stack '.' "$stack" "explicit include: $stack"
+      add_workspace_stack '.' 'docker' "explicit include: $stack (runtime companion)"
+      ;;
+    echo | fiber | gorm-postgresql)
+      add_workspace_stack '.' 'go' "explicit include: $stack"
+      add_workspace_stack '.' "$stack" "explicit include: $stack"
+      add_workspace_stack '.' 'docker' "explicit include: $stack (runtime companion)"
+      ;;
+    go)
+      add_workspace_stack '.' 'go' 'explicit include: go'
+      add_workspace_stack '.' 'docker' 'explicit include: go (runtime companion)'
+      ;;
+    *) add_workspace_stack '.' "$stack" "explicit include: $stack" ;;
+  esac
+done
+for stack in "${exclude_args[@]:-}"; do
+  [[ -z "$stack" ]] || remove_workspace_stack "$stack"
+done
+
+stack_order=(javascript-typescript astro nextjs nestjs go echo fiber gorm-postgresql docker)
+for index in "${!workspace_stacks[@]}"; do
+  stacks=${workspace_stacks[$index]}
+  ordered_stacks=''
+  for stack in "${stack_order[@]}"; do
+    contains_word "$stacks" "$stack" || continue
+    ordered_stacks="${ordered_stacks:+$ordered_stacks }$stack"
+  done
+  workspace_stacks[index]=$ordered_stacks
+done
+
+all_stacks=''
+for stacks in "${workspace_stacks[@]:-}"; do
+  for stack in $stacks; do
+    contains_word "$all_stacks" "$stack" || all_stacks="${all_stacks:+$all_stacks }$stack"
+  done
+done
+for framework in astro nextjs nestjs; do
+  if contains_word "$all_stacks" "$framework" && ! contains_word "$all_stacks" 'javascript-typescript'; then
+    printf 'install.sh: %s requires javascript-typescript; exclude both or neither\n' "$framework" >&2
+    exit 2
+  fi
+done
+for framework in echo fiber gorm-postgresql; do
+  if contains_word "$all_stacks" "$framework" && ! contains_word "$all_stacks" 'go'; then
+    printf 'install.sh: %s requires go; exclude both or neither\n' "$framework" >&2
+    exit 2
+  fi
+done
+
+selected=('general.md')
+detected=()
 add_selected() {
   local candidate=$1
-  local existing
-  for existing in "${selected[@]:-}"; do
-    [[ "$existing" == "$candidate" ]] && return
-  done
-  selected+=("$candidate")
+  array_contains "$candidate" "${selected[@]}" || selected+=("$candidate")
 }
-
 add_detected() {
   local candidate=$1
-  local existing
-  for existing in "${detected[@]:-}"; do
-    [[ "$existing" == "$candidate" ]] && return
-  done
-  detected+=("$candidate")
+  array_contains "$candidate" "${detected[@]:-}" || detected+=("$candidate")
 }
 
-has_javascript=0
-has_astro=0
-has_next=0
-has_nest=0
-has_go=0
-has_echo=0
-has_fiber=0
-has_gorm=0
-has_postgres=0
-has_docker=0
-
-while IFS= read -r -d '' manifest; do
-  has_javascript=1
-  grep -Eq '"astro"[[:space:]]*:' "$manifest" && has_astro=1
-  grep -Eq '"next"[[:space:]]*:' "$manifest" && has_next=1
-  grep -Eq '"@nestjs/core"[[:space:]]*:' "$manifest" && has_nest=1
-done < <(find_project_files -type f -name package.json -print0)
-
-if has_file_named 'tsconfig.json' || has_file_named 'jsconfig.json'; then
-  has_javascript=1
-fi
-if has_file_named 'astro.config.*'; then
-  has_javascript=1
-  has_astro=1
-fi
-if has_file_named 'next.config.*'; then
-  has_javascript=1
-  has_next=1
-fi
-if has_file_named 'nest-cli.json'; then
-  has_javascript=1
-  has_nest=1
-fi
-
-while IFS= read -r -d '' mod; do
-  has_go=1
-  grep -Eq 'github\.com/labstack/echo(/v[0-9]+)?([[:space:]]|$)' "$mod" && has_echo=1
-  grep -Eq 'github\.com/gofiber/fiber(/v[0-9]+)?([[:space:]]|$)' "$mod" && has_fiber=1
-  grep -Eq 'gorm\.io/gorm([[:space:]]|$)' "$mod" && has_gorm=1
-  grep -Eq '(gorm\.io/driver/postgres|github\.com/lib/pq|github\.com/jackc/pgx)' "$mod" && has_postgres=1
-done < <(find_project_files -type f -name go.mod -print0)
-
-if has_file_named 'Dockerfile*' ||
-  has_file_named 'docker-compose*.yml' ||
-  has_file_named 'docker-compose*.yaml' ||
-  has_file_named 'compose*.yml' ||
-  has_file_named 'compose*.yaml'; then
-  has_docker=1
-fi
-
-add_selected 'general.md'
-
-if ((has_javascript)); then
+if contains_word "$all_stacks" 'javascript-typescript'; then
   add_detected 'javascript-typescript'
   add_selected 'guidelines/javascript-typescript.md'
+  add_selected 'guidelines/haikel-javascript-typescript.md'
 fi
-if ((has_astro)); then
+if contains_word "$all_stacks" 'astro'; then
   add_detected 'astro'
   add_selected 'guidelines/astro.md'
-  has_docker=1
 fi
-if ((has_next)); then
+if contains_word "$all_stacks" 'nextjs'; then
   add_detected 'nextjs'
   add_selected 'guidelines/nextjs.md'
-  has_docker=1
 fi
-if ((has_nest)); then
+if contains_word "$all_stacks" 'nestjs'; then
   add_detected 'nestjs'
   add_selected 'guidelines/nestjs.md'
-  has_docker=1
 fi
-if ((has_go)); then
+if contains_word "$all_stacks" 'go'; then
   add_detected 'go'
   add_selected 'guidelines/go.md'
-  has_docker=1
+  add_selected 'guidelines/haikel-go.md'
 fi
-if ((has_echo)); then
+if contains_word "$all_stacks" 'echo'; then
   add_detected 'echo'
   add_selected 'guidelines/echo.md'
 fi
-if ((has_fiber)); then
+if contains_word "$all_stacks" 'fiber'; then
   add_detected 'fiber'
   add_selected 'guidelines/fiber.md'
 fi
-if ((has_gorm && has_postgres)); then
+if contains_word "$all_stacks" 'gorm-postgresql'; then
   add_detected 'gorm-postgresql'
   add_selected 'guidelines/gorm-postgresql.md'
 fi
-if ((has_docker)); then
+if contains_word "$all_stacks" 'docker'; then
   add_detected 'docker'
   add_selected 'guidelines/docker.md'
 fi
@@ -364,6 +659,8 @@ destination_for() {
       guidelines/fiber.md | \
       guidelines/go.md | \
       guidelines/gorm-postgresql.md | \
+      guidelines/haikel-go.md | \
+      guidelines/haikel-javascript-typescript.md | \
       guidelines/javascript-typescript.md | \
       guidelines/nestjs.md | \
       guidelines/nextjs.md)
@@ -449,6 +746,37 @@ if ((!skip_ignore_files)); then
   done
 fi
 
+valid_workspace_state_path() {
+  local path=$1
+  [[ -n "$path" && "$path" != '.' && "$path" != /* ]] || return 1
+  case "/$path/" in
+    */../* | */./* | *//* | *$'\n'* | *$'\t'* | *'`'*) return 1 ;;
+  esac
+  return 0
+}
+
+if ((workspace_instructions)); then
+  for index in "${!workspace_paths[@]}"; do
+    workspace=${workspace_paths[$index]}
+    [[ "$workspace" != '.' && -n "${workspace_stacks[$index]}" ]] || continue
+    if ! valid_workspace_state_path "$workspace"; then
+      printf 'install.sh: unsafe workspace instruction path: %s\n' "$workspace" >&2
+      exit 2
+    fi
+    validate_managed_block "$TARGET/$workspace/AGENTS.md" "$BEGIN_MARKER" "$END_MARKER"
+  done
+  if [[ -f "$TARGET/$WORKSPACE_STATE_REL" ]]; then
+    while IFS= read -r workspace; do
+      [[ -n "$workspace" && "$workspace" != \#* ]] || continue
+      if ! valid_workspace_state_path "$workspace"; then
+        printf 'install.sh: unsafe path in %s: %s\n' "$WORKSPACE_STATE_REL" "$workspace" >&2
+        exit 2
+      fi
+      validate_managed_block "$TARGET/$workspace/AGENTS.md" "$BEGIN_MARKER" "$END_MARKER"
+    done <"$TARGET/$WORKSPACE_STATE_REL"
+  fi
+fi
+
 if ((${#conflicts[@]})) && ((!force)); then
   printf 'install.sh: locally modified guideline files would be overwritten:\n' >&2
   printf '  %s\n' "${conflicts[@]}" >&2
@@ -457,6 +785,10 @@ if ((${#conflicts[@]})) && ((!force)); then
 fi
 
 printf 'Target: %s\n' "$TARGET"
+if [[ "$TARGET" != "$REPOSITORY_ROOT" ]]; then
+  printf 'Repository root: %s\n' "$REPOSITORY_ROOT"
+  printf 'Workspace: %s\n' "$workspace_arg"
+fi
 printf 'Version: %s\n' "$source_version"
 if [[ -n "$local_source_dir" ]]; then
   printf 'Source: local checkout\n'
@@ -473,11 +805,46 @@ if ((${#detected[@]})); then
 else
   printf 'Detected: no supported stack; installing general guidance only\n'
 fi
+if ((explain)); then
+  printf 'Detection evidence:\n'
+  if ((${#evidence_sources[@]})); then
+    for index in "${!evidence_sources[@]}"; do
+      printf '  %s -> %s: %s\n' \
+        "${evidence_sources[$index]}" \
+        "${evidence_workspaces[$index]}" \
+        "${evidence_stacks[$index]}"
+    done
+  else
+    printf '  none\n'
+  fi
+  if ((${#monorepo_markers[@]})); then
+    printf 'Workspace metadata:\n'
+    printf '  %s\n' "${monorepo_markers[@]}"
+  fi
+  printf 'Workspace profiles:\n'
+  workspace_count=0
+  for index in "${!workspace_paths[@]}"; do
+    [[ -n "${workspace_stacks[$index]}" ]] || continue
+    workspace_count=$((workspace_count + 1))
+    printf '  %s: %s\n' "${workspace_paths[$index]}" "${workspace_stacks[$index]}"
+  done
+  ((workspace_count > 0)) || printf '  none\n'
+fi
 printf 'Guidelines:\n'
 printf '  %s\n' "${selected[@]}"
 if ((!skip_ignore_files)); then
   printf 'Agent ignore files:\n'
   printf '  %s\n' "${ignore_files[@]}"
+fi
+if ((workspace_instructions)); then
+  printf 'Workspace instruction files:\n'
+  workspace_count=0
+  for index in "${!workspace_paths[@]}"; do
+    [[ "${workspace_paths[$index]}" != '.' && -n "${workspace_stacks[$index]}" ]] || continue
+    workspace_count=$((workspace_count + 1))
+    printf '  %s/AGENTS.md\n' "${workspace_paths[$index]}"
+  done
+  ((workspace_count > 0)) || printf '  none\n'
 fi
 
 if ((dry_run)); then
@@ -517,46 +884,116 @@ manifest_tmp=$(mktemp "${TMPDIR:-/tmp}/ai-guideline-manifest.XXXXXX")
 agents_block_tmp=$(mktemp "${TMPDIR:-/tmp}/ai-guideline-block.XXXXXX")
 
 {
-  printf '# ai-guideline installer manifest v1\n'
+  printf '# ai-guideline installer manifest v2\n'
+  for index in "${!workspace_paths[@]}"; do
+    [[ -n "${workspace_stacks[$index]}" ]] || continue
+    printf '# workspace %s: %s\n' "${workspace_paths[$index]}" "${workspace_stacks[$index]}"
+  done
   for source_rel in "${selected[@]}"; do
     printf '%s %s\n' "$source_rel" "$(sha256_file "$source_dir/$source_rel")"
   done
 } >"$manifest_tmp"
 cat "$manifest_tmp" >"$old_manifest"
 
+markdown_path() {
+  local prefix=$1
+  local path=$2
+  printf '\140%s/%s\140' "$prefix" "$path"
+}
+
+render_context_profiles() {
+  local stacks=$1
+  local prefix=$2
+  printf '%s\n' '- **Repository setup, documentation, planning, or process:** no companion guideline.'
+  if contains_word "$stacks" 'javascript-typescript'; then
+    printf -- '- **JavaScript or TypeScript language/library work:** %s and %s.\n' \
+      "$(markdown_path "$prefix" 'guidelines/javascript-typescript.md')" \
+      "$(markdown_path "$prefix" 'guidelines/haikel-javascript-typescript.md')"
+  fi
+  if contains_word "$stacks" 'astro'; then
+    printf -- '- **Astro UI or application work:** %s, %s, and %s.\n' \
+      "$(markdown_path "$prefix" 'guidelines/javascript-typescript.md')" \
+      "$(markdown_path "$prefix" 'guidelines/haikel-javascript-typescript.md')" \
+      "$(markdown_path "$prefix" 'guidelines/astro.md')"
+  fi
+  if contains_word "$stacks" 'nextjs'; then
+    printf -- '- **Next.js UI or application work:** %s, %s, and %s.\n' \
+      "$(markdown_path "$prefix" 'guidelines/javascript-typescript.md')" \
+      "$(markdown_path "$prefix" 'guidelines/haikel-javascript-typescript.md')" \
+      "$(markdown_path "$prefix" 'guidelines/nextjs.md')"
+  fi
+  if contains_word "$stacks" 'nestjs'; then
+    printf -- '- **NestJS API or service work:** %s, %s, and %s.\n' \
+      "$(markdown_path "$prefix" 'guidelines/javascript-typescript.md')" \
+      "$(markdown_path "$prefix" 'guidelines/haikel-javascript-typescript.md')" \
+      "$(markdown_path "$prefix" 'guidelines/nestjs.md')"
+  fi
+  if contains_word "$stacks" 'go'; then
+    printf -- '- **Go language, package, or service work:** %s and %s.\n' \
+      "$(markdown_path "$prefix" 'guidelines/go.md')" \
+      "$(markdown_path "$prefix" 'guidelines/haikel-go.md')"
+  fi
+  if contains_word "$stacks" 'echo'; then
+    printf -- '- **Echo HTTP work:** %s, %s, and %s.\n' \
+      "$(markdown_path "$prefix" 'guidelines/go.md')" \
+      "$(markdown_path "$prefix" 'guidelines/haikel-go.md')" \
+      "$(markdown_path "$prefix" 'guidelines/echo.md')"
+  fi
+  if contains_word "$stacks" 'fiber'; then
+    printf -- '- **Fiber HTTP work:** %s, %s, and %s.\n' \
+      "$(markdown_path "$prefix" 'guidelines/go.md')" \
+      "$(markdown_path "$prefix" 'guidelines/haikel-go.md')" \
+      "$(markdown_path "$prefix" 'guidelines/fiber.md')"
+  fi
+  if contains_word "$stacks" 'gorm-postgresql'; then
+    printf -- '- **GORM or PostgreSQL persistence work:** %s, %s, and %s; add the applicable HTTP profile only when transport behavior also changes.\n' \
+      "$(markdown_path "$prefix" 'guidelines/go.md')" \
+      "$(markdown_path "$prefix" 'guidelines/haikel-go.md')" \
+      "$(markdown_path "$prefix" 'guidelines/gorm-postgresql.md')"
+  fi
+  if contains_word "$stacks" 'docker'; then
+    printf -- '- **Container, Compose, delivery, or runtime work:** %s; add an application profile only when its build or runtime behavior also changes.\n' \
+      "$(markdown_path "$prefix" 'guidelines/docker.md')"
+  fi
+  printf '%s\n' '- **Cross-cutting work:** use the union of only the affected profiles and state why each additional document is needed.'
+}
+
+relative_agents_dir() {
+  local workspace=$1
+  local rest=$workspace
+  local prefix=''
+  while [[ -n "$rest" ]]; do
+    prefix="../$prefix"
+    if [[ "$rest" == */* ]]; then
+      rest=${rest#*/}
+    else
+      rest=''
+    fi
+  done
+  printf '%s.agents\n' "$prefix"
+}
+
 {
   printf '%s\n' "$BEGIN_MARKER"
   printf '## AI Engineering Guidelines\n\n'
   printf '%s\n\n' "Read \`.agents/general.md\` for every task. Then select the smallest matching context profile below. Do not read every installed companion by default. Repository-local contracts and instructions remain authoritative."
-  printf '%s\n' '- **Repository setup, documentation, planning, or process:** no companion guideline.'
-  if ((has_javascript)); then
-    printf '%s\n' "- **JavaScript or TypeScript language/library work:** \`.agents/guidelines/javascript-typescript.md\`."
+  render_context_profiles "$all_stacks" '.agents'
+  workspace_count=0
+  for index in "${!workspace_paths[@]}"; do
+    [[ "${workspace_paths[$index]}" != '.' && -n "${workspace_stacks[$index]}" ]] || continue
+    workspace_count=$((workspace_count + 1))
+  done
+  if ((workspace_count)); then
+    printf '\n### Workspace scopes\n\n'
+    printf '%s\n\n' "Match the changed path first, then use only that workspace's applicable profile."
+    for index in "${!workspace_paths[@]}"; do
+      [[ "${workspace_paths[$index]}" != '.' && -n "${workspace_stacks[$index]}" ]] || continue
+      formatted_stacks=${workspace_stacks[$index]// /, }
+      printf -- '- %s: %s.\n' \
+        "$(printf '\140%s/**\140' "${workspace_paths[$index]}")" \
+        "$formatted_stacks"
+    done
   fi
-  if ((has_astro)); then
-    printf '%s\n' "- **Astro UI or application work:** \`.agents/guidelines/javascript-typescript.md\` and \`.agents/guidelines/astro.md\`."
-  fi
-  if ((has_next)); then
-    printf '%s\n' "- **Next.js UI or application work:** \`.agents/guidelines/javascript-typescript.md\` and \`.agents/guidelines/nextjs.md\`."
-  fi
-  if ((has_nest)); then
-    printf '%s\n' "- **NestJS API or service work:** \`.agents/guidelines/javascript-typescript.md\` and \`.agents/guidelines/nestjs.md\`."
-  fi
-  if ((has_go)); then
-    printf '%s\n' "- **Go language, package, or service work:** \`.agents/guidelines/go.md\`."
-  fi
-  if ((has_echo)); then
-    printf '%s\n' "- **Echo HTTP work:** \`.agents/guidelines/go.md\` and \`.agents/guidelines/echo.md\`."
-  fi
-  if ((has_fiber)); then
-    printf '%s\n' "- **Fiber HTTP work:** \`.agents/guidelines/go.md\` and \`.agents/guidelines/fiber.md\`."
-  fi
-  if ((has_gorm && has_postgres)); then
-    printf '%s\n' "- **GORM or PostgreSQL persistence work:** \`.agents/guidelines/go.md\` and \`.agents/guidelines/gorm-postgresql.md\`; add the applicable HTTP profile only when transport behavior also changes."
-  fi
-  if ((has_docker)); then
-    printf '%s\n' "- **Container, Compose, delivery, or runtime work:** \`.agents/guidelines/docker.md\`; add an application profile only when its build or runtime behavior also changes."
-  fi
-  printf '%s\n' '- **Cross-cutting work:** use the union of only the affected profiles and state why each additional document is needed.'
   printf '%s\n' "$END_MARKER"
 } >"$agents_block_tmp"
 
@@ -590,7 +1027,81 @@ write_managed_block() {
   managed_tmp=''
 }
 
+remove_managed_block() {
+  local file=$1
+  local begin_marker=$2
+  local end_marker=$3
+  [[ -f "$file" ]] || return 0
+
+  managed_tmp=$(mktemp "${TMPDIR:-/tmp}/ai-guideline-managed.XXXXXX")
+  awk -v begin="$begin_marker" -v end="$end_marker" '
+  $0 == begin { skipping=1; next }
+  $0 == end { skipping=0; next }
+  !skipping { print }
+  ' "$file" >"$managed_tmp"
+  if [[ -s "$managed_tmp" ]]; then
+    cat "$managed_tmp" >"$file"
+  else
+    rm -f "$file"
+  fi
+  rm -f "$managed_tmp"
+  managed_tmp=''
+}
+
+workspace_is_desired() {
+  local candidate=$1
+  local index
+  for index in "${!workspace_paths[@]}"; do
+    if [[ "${workspace_paths[$index]}" == "$candidate" &&
+      "$candidate" != '.' && -n "${workspace_stacks[$index]}" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
 write_managed_block "$agents_file" "$agents_block_tmp" "$BEGIN_MARKER" "$END_MARKER"
+
+if ((workspace_instructions)); then
+  workspace_state_tmp=$(mktemp "${TMPDIR:-/tmp}/ai-guideline-workspaces.XXXXXX")
+  printf '# ai-guideline workspace instructions v1\n' >"$workspace_state_tmp"
+
+  if [[ -f "$TARGET/$WORKSPACE_STATE_REL" ]]; then
+    while IFS= read -r workspace; do
+      [[ -n "$workspace" && "$workspace" != \#* ]] || continue
+      workspace_is_desired "$workspace" && continue
+      remove_managed_block "$TARGET/$workspace/AGENTS.md" "$BEGIN_MARKER" "$END_MARKER"
+    done <"$TARGET/$WORKSPACE_STATE_REL"
+  fi
+
+  for index in "${!workspace_paths[@]}"; do
+    workspace=${workspace_paths[$index]}
+    stacks=${workspace_stacks[$index]}
+    [[ "$workspace" != '.' && -n "$stacks" ]] || continue
+    workspace_block_tmp=$(mktemp "${TMPDIR:-/tmp}/ai-guideline-workspace-block.XXXXXX")
+    guidelines_dir=$(relative_agents_dir "$workspace")
+    {
+      printf '%s\n' "$BEGIN_MARKER"
+      printf '## AI Engineering Guidelines — Workspace\n\n'
+      printf 'Scope: %s. Read %s for every task in this workspace, then select the smallest matching profile.\n\n' \
+        "$(printf '\140%s/**\140' "$workspace")" \
+        "$(markdown_path "$guidelines_dir" 'general.md')"
+      render_context_profiles "$stacks" "$guidelines_dir"
+      printf '%s\n' "$END_MARKER"
+    } >"$workspace_block_tmp"
+    write_managed_block \
+      "$TARGET/$workspace/AGENTS.md" \
+      "$workspace_block_tmp" \
+      "$BEGIN_MARKER" \
+      "$END_MARKER"
+    rm -f "$workspace_block_tmp"
+    workspace_block_tmp=''
+    printf '%s\n' "$workspace" >>"$workspace_state_tmp"
+  done
+  cat "$workspace_state_tmp" >"$TARGET/$WORKSPACE_STATE_REL"
+  rm -f "$workspace_state_tmp"
+  workspace_state_tmp=''
+fi
 
 if ((!skip_ignore_files)); then
   for ignore_file in "${ignore_files[@]}"; do

@@ -22,6 +22,9 @@ transactions, migrations, and deployment.
 
 - [`guidelines/javascript-typescript.md`](guidelines/javascript-typescript.md) —
   language-level JavaScript and TypeScript rules.
+- [`guidelines/haikel-javascript-typescript.md`](guidelines/haikel-javascript-typescript.md) —
+  owner's TypeScript profile: formatting, typed boundaries, React/Next structure,
+  data fetching, NestJS layering, and verification.
 - [`guidelines/astro.md`](guidelines/astro.md) — Astro rendering modes,
   file-based routing, content collections, islands, UI integrations, CMS and
   i18n boundaries, web quality, testing, and static deployment.
@@ -34,6 +37,9 @@ transactions, migrations, and deployment.
 ### Go
 
 - [`guidelines/go.md`](guidelines/go.md) — language-level Go rules.
+- [`guidelines/haikel-go.md`](guidelines/haikel-go.md) — owner's Go service
+  profile: domain layers, Echo handlers, GORM access, finance invariants,
+  observability, migration safety, and verification.
 - [`guidelines/echo.md`](guidelines/echo.md) — Echo routing, middleware, HTTP
   boundaries, authentication, security, and lifecycle.
 - [`guidelines/fiber.md`](guidelines/fiber.md) — Fiber app construction, routing,
@@ -51,8 +57,8 @@ transactions, migrations, and deployment.
 ## Automated Installation
 
 `install.sh` recursively detects supported stacks, including applications in a
-monorepo, and installs only the applicable documents. Preview the selection
-before writing:
+monorepo, evaluates each workspace independently, and installs only the
+applicable documents. Preview the selection before writing:
 
 ```bash
 ./install.sh --dry-run /path/to/project
@@ -138,6 +144,7 @@ AGENTS.md
 .agents/
 ├── general.md
 ├── .ai-guideline-manifest
+├── .ai-guideline-workspaces  # only with --workspace-instructions
 └── guidelines/
     └── <detected-stack>.md
 ```
@@ -166,6 +173,70 @@ Profiles are navigational pointers, not copies of policy. Cross-cutting work use
 the union of only the affected profiles. This keeps agent context focused while
 preserving one source of truth for each language, framework, persistence, or
 infrastructure rule.
+
+### Monorepo workflows
+
+The default remains fast and centralized: run the installer once at the
+repository root. It installs the union of required documents in root `.agents`,
+records each workspace's final stack decision in the manifest, and adds path
+scopes to the managed root `AGENTS.md` block. Composite detection is local to a
+workspace, so GORM in one Go module and a PostgreSQL driver in another do not
+incorrectly select the combined persistence guideline.
+
+Explain every decision without writing:
+
+```bash
+./install.sh --explain /path/to/monorepo
+```
+
+The report maps evidence files to workspace paths and final stack profiles. It
+also reports recognized workspace metadata such as `go.work`,
+`pnpm-workspace.yaml`, `nx.json`, `turbo.json`, and `lerna.json`.
+
+For the fastest focused setup, install only inside one workspace:
+
+```bash
+./install.sh --workspace apps/web /path/to/monorepo
+./install.sh --workspace services/worker /path/to/monorepo
+```
+
+This writes `.agents`, `AGENTS.md`, and ignore files inside the selected
+workspace and does not change the monorepo root or sibling workspaces.
+
+Create package-scoped instructions only when closer instructions are useful:
+
+```bash
+./install.sh --workspace-instructions /path/to/monorepo
+```
+
+This option writes bounded managed blocks to detected workspace `AGENTS.md`
+files. Existing content is preserved, paths point to the shared root `.agents`,
+repeated runs are deterministic, and stale managed blocks are removed when a
+workspace disappears from detection. Without this option, nested `AGENTS.md`
+files are not modified.
+
+### Detection overrides
+
+Use repeated command-line overrides for one run:
+
+```bash
+./install.sh --include fiber --exclude docker /path/to/project
+```
+
+For durable repository decisions, create `.ai-guideline.conf` at the target
+repository root with one non-executable directive per line:
+
+```text
+# Supported directives are include and exclude.
+include nextjs
+exclude docker
+```
+
+Supported names are `javascript-typescript`, `astro`, `nextjs`, `nestjs`, `go`,
+`echo`, `fiber`, `gorm-postgresql`, and `docker`. Unknown names, malformed lines,
+duplicate include/exclude conflicts, and framework selections without their
+language dependency are rejected before files are written. An explicit Docker
+exclusion is allowed when a project does not use containers.
 
 The manifest records installed content hashes. On later runs, files that still
 match their previous installed hash update automatically, and obsolete
@@ -209,7 +280,7 @@ terminal or plugin tools.
 
 ### Detection matrix
 
-| Evidence found anywhere in the target | Guidelines selected |
+| Evidence found in one workspace | Guidelines selected |
 | --- | --- |
 | Every project | General |
 | `package.json`, `tsconfig.json`, or `jsconfig.json` | JavaScript and TypeScript |
@@ -219,12 +290,14 @@ terminal or plugin tools.
 | `go.mod` | Go, Docker |
 | Echo module in `go.mod` | Echo, in addition to Go |
 | Fiber module in `go.mod` | Fiber, in addition to Go |
-| GORM plus a PostgreSQL driver in `go.mod` | GORM and PostgreSQL, in addition to Go |
+| GORM plus a PostgreSQL driver in the same `go.mod` | GORM and PostgreSQL, in addition to Go |
 | Dockerfile or Compose file | Docker |
 
 Generated output, dependencies, VCS metadata, vendor trees, caches, and an
 existing `.agents` directory are excluded from detection. Detection does not
-execute project code or read environment files.
+execute project code or read environment files. Paths containing spaces are
+supported; paths containing control characters or Markdown backticks are
+rejected when generating scoped instructions.
 
 ## Usage
 

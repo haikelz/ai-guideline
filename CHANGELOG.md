@@ -5,6 +5,15 @@ All notable changes to this project are documented here. Releases follow
 
 ## [Unreleased]
 
+### Added
+
+- Owner-specific JavaScript/TypeScript and Go engineering profiles derived from
+  established SOBAT HEBAT and AhsanXpress practices.
+- Workspace-aware monorepo detection with path-scoped context profiles.
+- Explainable evidence, focused workspace installation, and validated stack
+  overrides.
+- Optional nested workspace instructions with preservation and stale cleanup.
+
 ## [1.1.0] - 2026-08-28
 
 ### Added
