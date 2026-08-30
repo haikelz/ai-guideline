@@ -527,7 +527,7 @@ for framework in echo fiber gorm-postgresql; do
   fi
 done
 
-selected=('general.md')
+selected=('general.md' 'preferences.md')
 detected=()
 add_selected() {
   local candidate=$1
@@ -653,6 +653,7 @@ fi
 destination_for() {
   case "$1" in
     general.md) printf '%s/.agents/general.md\n' "$TARGET" ;;
+    preferences.md) printf '%s/.agents/preferences.md\n' "$TARGET" ;;
     guidelines/astro.md | \
       guidelines/docker.md | \
       guidelines/echo.md | \
@@ -976,7 +977,7 @@ relative_agents_dir() {
 {
   printf '%s\n' "$BEGIN_MARKER"
   printf '## AI Engineering Guidelines\n\n'
-  printf '%s\n\n' "Read \`.agents/general.md\` for every task. Then select the smallest matching context profile below. Do not read every installed companion by default. Repository-local contracts and instructions remain authoritative."
+  printf '%s\n\n' "Read \`.agents/general.md\` and \`.agents/preferences.md\` for every task. Then select the smallest matching context profile below. Do not read every installed companion by default. Repository-local contracts and instructions remain authoritative."
   render_context_profiles "$all_stacks" '.agents'
   workspace_count=0
   for index in "${!workspace_paths[@]}"; do
@@ -1083,9 +1084,10 @@ if ((workspace_instructions)); then
     {
       printf '%s\n' "$BEGIN_MARKER"
       printf '## AI Engineering Guidelines — Workspace\n\n'
-      printf 'Scope: %s. Read %s for every task in this workspace, then select the smallest matching profile.\n\n' \
+      printf 'Scope: %s. Read %s and %s for every task in this workspace, then select the smallest matching profile.\n\n' \
         "$(printf '\140%s/**\140' "$workspace")" \
-        "$(markdown_path "$guidelines_dir" 'general.md')"
+        "$(markdown_path "$guidelines_dir" 'general.md')" \
+        "$(markdown_path "$guidelines_dir" 'preferences.md')"
       render_context_profiles "$stacks" "$guidelines_dir"
       printf '%s\n' "$END_MARKER"
     } >"$workspace_block_tmp"

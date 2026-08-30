@@ -71,6 +71,7 @@ assert_not_contains "$next/.cursorignore" '# AI-GUIDELINES-IGNORE:BEGIN'
 
 "$INSTALLER" "$next" >/dev/null
 assert_file "$next/.agents/general.md"
+assert_file "$next/.agents/preferences.md"
 assert_file "$next/.agents/guidelines/javascript-typescript.md"
 assert_file "$next/.agents/guidelines/haikel-javascript-typescript.md"
 assert_file "$next/.agents/guidelines/nextjs.md"
@@ -79,6 +80,7 @@ assert_no_file "$next/.agents/guidelines/nestjs.md"
 assert_contains "$next/AGENTS.md" '# Existing instructions'
 assert_count "$next/AGENTS.md" '<!-- AI-GUIDELINES:BEGIN -->' 1
 assert_contains "$next/AGENTS.md" 'select the smallest matching context profile'
+assert_contains "$next/AGENTS.md" '`.agents/general.md` and `.agents/preferences.md`'
 assert_contains "$next/AGENTS.md" 'Do not read every installed companion by default.'
 assert_contains "$next/AGENTS.md" "- **Next.js UI or application work:** \`.agents/guidelines/javascript-typescript.md\`, \`.agents/guidelines/haikel-javascript-typescript.md\`, and \`.agents/guidelines/nextjs.md\`."
 assert_not_contains "$next/AGENTS.md" 'NestJS API or service work'
@@ -251,6 +253,7 @@ assert_contains "$monorepo/AGENTS.md" "\`apps/customer portal/**\`: javascript-t
 assert_contains "$monorepo/apps/customer portal/AGENTS.md" '# Existing workspace policy'
 assert_contains "$monorepo/apps/customer portal/AGENTS.md" "Scope: \`apps/customer portal/**\`."
 assert_contains "$monorepo/apps/customer portal/AGENTS.md" "\`../../.agents/general.md\`"
+assert_contains "$monorepo/apps/customer portal/AGENTS.md" "\`../../.agents/preferences.md\`"
 assert_contains "$monorepo/apps/api/AGENTS.md" "\`../../.agents/guidelines/nestjs.md\`"
 assert_contains "$monorepo/apps/nx-api/AGENTS.md" "\`../../.agents/guidelines/nestjs.md\`"
 assert_contains "$monorepo/.agents/.ai-guideline-workspaces" 'apps/customer portal'
@@ -381,7 +384,7 @@ assert_file "$remote/.ignore"
 tampered_mirror="$work/tampered-mirror"
 tampered_target="$work/tampered-target"
 mkdir -p "$tampered_mirror/ignores" "$tampered_target"
-cp "$ROOT/VERSION" "$ROOT/CHECKSUMS.sha256" "$ROOT/general.md" "$tampered_mirror/"
+cp "$ROOT/VERSION" "$ROOT/CHECKSUMS.sha256" "$ROOT/general.md" "$ROOT/preferences.md" "$tampered_mirror/"
 cp "$ROOT/ignores/agent.ignore" "$tampered_mirror/ignores/"
 printf '\ntampered payload\n' >>"$tampered_mirror/general.md"
 if (

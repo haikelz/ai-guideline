@@ -12,6 +12,9 @@ transactions, migrations, and deployment.
 - [`general.md`](general.md) — repository setup, engineering harness, sources of
   truth, Git-native planning, authority, documentation, verification, CI,
   runbooks, and measured process improvement.
+- [`preferences.md`](preferences.md) — owner's cross-stack quality profile for
+  code rhythm, complete-scope cleanup, frontend libraries, interface design,
+  natural writing, verification, and Git delivery.
 - [`ignores/README.md`](ignores/README.md) — supported coding-agent ignore files,
   shared exclusions, tool mappings, and security limitations.
 - [`CHANGELOG.md`](CHANGELOG.md) — version history and notable behavior changes.
@@ -143,6 +146,7 @@ The installer writes this project-local layout:
 AGENTS.md
 .agents/
 ├── general.md
+├── preferences.md
 ├── .ai-guideline-manifest
 ├── .ai-guideline-workspaces  # only with --workspace-instructions
 └── guidelines/
@@ -162,12 +166,12 @@ preserved:
 ### Context profiles
 
 The managed `AGENTS.md` block composes task-oriented context profiles from the
-detected stack. Every task reads `general.md`, then loads only the smallest
-matching companion set. For example, a repository containing a Next.js app and
-Docker configuration receives separate profiles for JavaScript or TypeScript,
-Next.js application work, and container or delivery work. A UI-only task does
-not load the Docker guideline, and a Docker-only task does not load the Next.js
-guideline.
+detected stack. Every task reads `general.md` and `preferences.md`, then loads
+only the smallest matching companion set. For example, a repository containing
+a Next.js app and Docker configuration receives separate profiles for JavaScript
+or TypeScript, Next.js application work, and container or delivery work. A
+UI-only task does not load the Docker guideline, and a Docker-only task does not
+load the Next.js guideline.
 
 Profiles are navigational pointers, not copies of policy. Cross-cutting work uses
 the union of only the affected profiles. This keeps agent context focused while
@@ -301,9 +305,10 @@ rejected when generating scoped instructions.
 
 ## Usage
 
-Use `general.md` as the project-wide baseline, then load only the applicable
-language, framework, persistence, and infrastructure companions. These guidelines
-do not replace repository-local rules. The order of precedence is:
+Use `general.md` and `preferences.md` as the project-wide baseline, then load
+only the applicable language, framework, persistence, and infrastructure
+companions. These guidelines do not replace repository-local rules. The order
+of precedence is:
 
 1. The current requirements and acceptance criteria.
 2. Repository-local rules such as `AGENTS.md`, `CLAUDE.md`, ADRs, and domain
@@ -339,8 +344,9 @@ version or publishing a tag.
    before changing an implementation.
 2. **Simple but explicit.** Choose the solution with the fewest layers, helpers,
    and names that still makes intent clear.
-3. **Mechanically consistent.** Formatters and linters are the source of truth; do
-   not rely on manual formatting preferences.
+3. **Mechanically consistent, semantically readable.** Formatters and linters own
+   mechanical policy; deliberate source structure and semantic spacing still
+   require human review.
 4. **Typed and validated boundaries.** Never trust external input.
 5. **Visible business invariants.** Place policy in the domain or use case, enforce
    it in the database where possible, and prove it with tests.

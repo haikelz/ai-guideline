@@ -30,6 +30,7 @@ files=(
   'VERSION'
   'install.sh'
   'general.md'
+  'preferences.md'
   'ignores/agent.ignore'
 )
 while IFS= read -r guideline; do

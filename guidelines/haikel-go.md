@@ -1,9 +1,9 @@
 # Haikel Go Engineering Profile
 
 This profile records the owner's demonstrated Go service conventions. Load it
-with `go.md`, then add the applicable Echo, GORM/PostgreSQL, Docker, and
-infrastructure guidelines. Repository-local rules, finance documentation, and
-public contracts take precedence.
+with `preferences.md` and `go.md`, then add the applicable Echo,
+GORM/PostgreSQL, Docker, and infrastructure guidelines. Repository-local rules,
+finance documentation, and public contracts take precedence.
 
 ## 1. Service Shape and Ownership
 
@@ -40,11 +40,21 @@ route → HTTP handler → domain usecase → repository interface → GORM/Post
 - Use DTO suffixes for transport contracts and `Usecase`, `Repository`, and
   `Handler` suffixes where the architecture already makes that ownership useful.
 - Constructors should make dependencies explicit and normally return the domain
-  interface when callers should depend only on the capability.
+  interface when callers should depend only on the capability. Use a keyed,
+  multiline literal so dependency mapping remains visible after formatting.
+- Declare one named struct field per line. Do not compress fields of the same type
+  into `first, second string` when the struct represents a domain, transport,
+  persistence, or dependency contract.
+- Do not use positional literals for application structs, results, cursors,
+  errors, or test fixtures. Keyed fields protect meaning when fields are added or
+  reordered. Compact positional forms remain acceptable only for conventional
+  value types where the meaning is unmistakable.
 
 ```go
 func NewBannerUsecase(repo banner.Repository) banner.Usecase {
-    return &bannerUsecase{repository: repo}
+	return &bannerUsecase{
+		repository: repo,
+	}
 }
 ```
 
@@ -70,8 +80,10 @@ groups of related statements, not from line count.
   transformation, and append/update work when several of those phases exist.
 - In tests, use arrange, act, and assert groups. Keep the setup for one scenario
   together rather than scattering blank lines through every assignment.
-- Prefer multiline keyed literals, constructor returns, and argument lists when
-  a one-line form makes ownership or field grouping harder to scan.
+- Use multiline keyed literals for constructors and application structs. Expand
+  callbacks with meaningful work instead of hiding their body on one line.
+- Wrap calls and argument lists when they mix several domain values, contain a
+  nested literal, or require horizontal rereading to understand ownership.
 - Use exactly one blank line for a boundary. Never add repeated blank lines,
   blank lines immediately inside braces, or whitespace that separates an
   operation from its error check.
@@ -102,9 +114,11 @@ func (h *Handler) Update(c echo.Context) error {
 }
 ```
 
-Before finishing a broad cleanup, inspect representative handlers, usecases,
-repositories, background workers, and tests after formatting. Passing `gofmt`
-alone does not prove that their visual rhythm matches this profile.
+Before finishing a broad cleanup, inventory and inspect every handwritten Go
+file in the declared scope after formatting. Include handlers, usecases,
+repositories, workers, commands, and tests; exclude generated files explicitly.
+Passing `gofmt` alone does not prove that their visual rhythm matches this
+profile.
 
 ## 3. HTTP Boundaries and Validation
 

@@ -15,6 +15,7 @@ MARKDOWN_FILES = [
     ROOT / "CHANGELOG.md",
     ROOT / "RELEASING.md",
     ROOT / "general.md",
+    ROOT / "preferences.md",
     ROOT / "ignores" / "README.md",
     *GUIDELINES,
 ]

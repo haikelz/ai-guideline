@@ -1,10 +1,11 @@
 # Haikel JavaScript and TypeScript Engineering Profile
 
 This profile records the owner's demonstrated JavaScript and TypeScript working
-style. Load it with `javascript-typescript.md`, then add the applicable framework
-guide. Repository-local rules, contracts, and tooling take precedence.
+style. Load it with `preferences.md` and `javascript-typescript.md`, then add the
+applicable framework guide. Repository-local rules, contracts, and tooling take
+precedence.
 
-The goal is code that is deliberately small, consistently formatted, type-safe at
+The goal is code that is deliberate, consistently formatted, type-safe at
 boundaries, and easy to trace from a route or component to its owning behavior.
 
 ## 1. Non-Negotiable Quality Bar
@@ -33,7 +34,7 @@ trailing commas where the syntax permits them.
 
 ```ts
 export async function getPatient(
-  patientId: string
+  patientId: string,
 ): Promise<PatientResponse> {
   const response = await axiosClient.get(`/patients/${patientId}`);
 
@@ -63,9 +64,12 @@ but semantic blank lines remain an engineering decision.
   read input, validate, authorize, execute, translate the result, return.
 - In tests, group arrange, act, and assert sections with one blank line between
   them when the test contains more than a trivial assertion.
-- Expand dense object literals, function calls, and callback bodies when their
-  one-line form hides ownership or makes the surrounding block difficult to
-  scan.
+- Expand object literals, function calls, conditionals, JSX props, and callback
+  bodies when they contain several meaningful values or hide ownership in a
+  one-line form. Prefer one property or logical argument per line in the expanded
+  form.
+- Keep a concise expression on one line only when it remains immediately obvious
+  in context. Do not optimize source for minimum line count.
 - Use one blank line per semantic boundary. Avoid repeated blank lines, blank
   lines immediately inside braces, and whitespace that splits one operation
   from its directly associated error handling.
@@ -75,22 +79,24 @@ Preferred service rhythm:
 ```ts
 export async function updatePatient(
   patientId: string,
-  input: UpdatePatientInput
+  input: UpdatePatientInput,
 ): Promise<Patient> {
   const payload = updatePatientSchema.parse(input);
 
   const response = await axiosClient.patch(
     `/patients/${patientId}`,
-    payload
+    payload,
   );
 
   return response.data.data;
 }
 ```
 
-For broad cleanup, inspect representative routes, services, components, hooks,
-and tests after the formatter runs. A clean formatter result does not by itself
-prove that the code has the intended visual rhythm.
+For broad cleanup, inventory and inspect every handwritten JavaScript,
+TypeScript, and component file in the declared scope after the formatter runs.
+Include routes, services, components, hooks, schemas, and tests; exclude generated
+files explicitly. A clean formatter result does not by itself prove that the
+code has the intended visual rhythm.
 
 - Use `kebab-case` filenames, `PascalCase` component/type/class names, and
   `camelCase` values, functions, hooks, and handlers.
