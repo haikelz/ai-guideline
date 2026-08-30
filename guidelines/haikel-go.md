@@ -30,6 +30,9 @@ route → HTTP handler → domain usecase → repository interface → GORM/Post
 - Target the Go version declared by `go.mod`.
 - Run `gofmt -s` for every changed Go file and `goimports` with the module-local
   prefix when the project adopts it. Formatter output is authoritative.
+- Treat whitespace as part of readability. The formatter owns indentation and
+  alignment; the developer still owns intentional blank lines between semantic
+  phases.
 - Keep import groups as standard library, third-party, then module-local.
 - Use standard Go initialisms: `ID`, `URL`, `HTTP`, `JSON`, `API`, and `DTO`.
 - Use concise, lowercase package names; preserve existing legacy names instead
@@ -44,6 +47,64 @@ func NewBannerUsecase(repo banner.Repository) banner.Usecase {
     return &bannerUsecase{repository: repo}
 }
 ```
+
+### Visual rhythm and semantic spacing
+
+The owner prefers code with deliberate breathing room. Do not compress a
+function merely because `gofmt` accepts it. Readability comes from visible
+groups of related statements, not from line count.
+
+- Use one blank line between distinct phases. Common phases are authentication,
+  input parsing, normalization, validation, dependency calls, error handling,
+  result transformation, and response construction.
+- Keep an operation adjacent to the error check that handles it. Put the blank
+  line after the completed error block, before the next phase.
+- After a terminating guard clause, add a blank line before normal-path work
+  when the next statement begins a different concern.
+- Keep consecutive checks together when they validate the same input or
+  invariant. Do not insert a blank line after every `if` mechanically.
+- In repositories, visually separate transaction setup, query execution,
+  scan/error classification, domain mapping, audit or outbox work, commit, and
+  the final return.
+- In loops, separate row-local declarations, scanning, error handling,
+  transformation, and append/update work when several of those phases exist.
+- In tests, use arrange, act, and assert groups. Keep the setup for one scenario
+  together rather than scattering blank lines through every assignment.
+- Prefer multiline keyed literals, constructor returns, and argument lists when
+  a one-line form makes ownership or field grouping harder to scan.
+- Use exactly one blank line for a boundary. Never add repeated blank lines,
+  blank lines immediately inside braces, or whitespace that separates an
+  operation from its error check.
+
+Preferred handler rhythm:
+
+```go
+func (h *Handler) Update(c echo.Context) error {
+	actor, err := h.authenticate(c)
+	if err != nil {
+		return respondError(c, err)
+	}
+
+	var input UpdateInput
+	if err := c.Bind(&input); err != nil {
+		return respondError(c, ErrInvalidInput)
+	}
+	if err := c.Validate(&input); err != nil {
+		return respondError(c, err)
+	}
+
+	result, err := h.usecase.Update(c.Request().Context(), actor, input)
+	if err != nil {
+		return respondError(c, err)
+	}
+
+	return respondSuccess(c, result)
+}
+```
+
+Before finishing a broad cleanup, inspect representative handlers, usecases,
+repositories, background workers, and tests after formatting. Passing `gofmt`
+alone does not prove that their visual rhythm matches this profile.
 
 ## 3. HTTP Boundaries and Validation
 

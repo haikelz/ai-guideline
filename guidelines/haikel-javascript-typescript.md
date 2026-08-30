@@ -17,6 +17,8 @@ boundaries, and easy to trace from a route or component to its owning behavior.
   pattern only in the changed area and only when it does not expand scope.
 - Formatting is part of correctness. Use the repository formatter; never make
   hand-aligned whitespace edits that fight it.
+- Formatting alone is not enough. Use intentional blank lines to expose the
+  phases of a function instead of presenting correct code as one dense block.
 - A file MUST have one clear responsibility. Keep route composition, UI,
   validation, remote data, and transport concerns at their natural boundaries.
 - Comments MUST explain a constraint or decision that code cannot state. Remove
@@ -34,9 +36,61 @@ export async function getPatient(
   patientId: string
 ): Promise<PatientResponse> {
   const response = await axiosClient.get(`/patients/${patientId}`);
+
   return response.data.data;
 }
 ```
+
+### Visual rhythm and semantic spacing
+
+The owner prefers clean, spacious code whose execution phases are visible at a
+glance. Prettier or Biome remains authoritative for indentation and wrapping,
+but semantic blank lines remain an engineering decision.
+
+- Separate authentication, parsing, normalization, validation, remote calls,
+  error translation, state transformation, and response construction when they
+  are distinct phases.
+- Keep an awaited operation next to its error handling. Add breathing room after
+  that block before starting the next concern.
+- Keep related validation checks together. Do not add a blank line after every
+  condition, assignment, or hook mechanically.
+- Separate derived data from side effects and separate side effects from the
+  final returned value or rendered branch.
+- In React components, visually group hooks by purpose: inputs and context,
+  local state, remote queries, derived values, callbacks, effects, then render
+  guards and JSX. Do not interleave unrelated hooks and transformations.
+- In services and route handlers, use the same visible sequence as the backend:
+  read input, validate, authorize, execute, translate the result, return.
+- In tests, group arrange, act, and assert sections with one blank line between
+  them when the test contains more than a trivial assertion.
+- Expand dense object literals, function calls, and callback bodies when their
+  one-line form hides ownership or makes the surrounding block difficult to
+  scan.
+- Use one blank line per semantic boundary. Avoid repeated blank lines, blank
+  lines immediately inside braces, and whitespace that splits one operation
+  from its directly associated error handling.
+
+Preferred service rhythm:
+
+```ts
+export async function updatePatient(
+  patientId: string,
+  input: UpdatePatientInput
+): Promise<Patient> {
+  const payload = updatePatientSchema.parse(input);
+
+  const response = await axiosClient.patch(
+    `/patients/${patientId}`,
+    payload
+  );
+
+  return response.data.data;
+}
+```
+
+For broad cleanup, inspect representative routes, services, components, hooks,
+and tests after the formatter runs. A clean formatter result does not by itself
+prove that the code has the intended visual rhythm.
 
 - Use `kebab-case` filenames, `PascalCase` component/type/class names, and
   `camelCase` values, functions, hooks, and handlers.

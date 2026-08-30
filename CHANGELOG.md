@@ -9,6 +9,8 @@ All notable changes to this project are documented here. Releases follow
 
 - Owner-specific JavaScript/TypeScript and Go engineering profiles derived from
   established SOBAT HEBAT and AhsanXpress practices.
+- Owner-specific semantic spacing rules for visually grouping authentication,
+  validation, execution, persistence, transformation, and test phases.
 - Workspace-aware monorepo detection with path-scoped context profiles.
 - Explainable evidence, focused workspace installation, and validated stack
   overrides.
