@@ -26,8 +26,8 @@ transactions, migrations, and deployment.
 - [`guidelines/javascript-typescript.md`](guidelines/javascript-typescript.md) —
   language-level JavaScript and TypeScript rules.
 - [`guidelines/haikel-javascript-typescript.md`](guidelines/haikel-javascript-typescript.md) —
-  owner's TypeScript profile: formatting, typed boundaries, React/Next structure,
-  data fetching, NestJS layering, and verification.
+  owner's TypeScript profile: exact Biome formatting, import and declaration
+  order, React/Next feature structure, typed data boundaries, and verification.
 - [`guidelines/astro.md`](guidelines/astro.md) — Astro rendering modes,
   file-based routing, content collections, islands, UI integrations, CMS and
   i18n boundaries, web quality, testing, and static deployment.
@@ -41,8 +41,8 @@ transactions, migrations, and deployment.
 
 - [`guidelines/go.md`](guidelines/go.md) — language-level Go rules.
 - [`guidelines/haikel-go.md`](guidelines/haikel-go.md) — owner's Go service
-  profile: domain layers, Echo handlers, GORM access, finance invariants,
-  observability, migration safety, and verification.
+  profile: domain module layout, semantic spacing, handler/usecase/repository
+  workflows, GORM access, finance invariants, migration safety, and verification.
 - [`guidelines/echo.md`](guidelines/echo.md) — Echo routing, middleware, HTTP
   boundaries, authentication, security, and lifecycle.
 - [`guidelines/fiber.md`](guidelines/fiber.md) — Fiber app construction, routing,

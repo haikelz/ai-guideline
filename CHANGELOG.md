@@ -11,9 +11,14 @@ All notable changes to this project are documented here. Releases follow
   semantic code rhythm, preferred React tooling, non-generic interface design,
   natural Indonesian and English writing, verification, and Git delivery.
 - Owner-specific JavaScript/TypeScript and Go engineering profiles derived from
-  established SOBAT HEBAT and AhsanXpress practices.
+  established frontend, backend, and service practices.
 - Owner-specific semantic spacing rules for visually grouping authentication,
   validation, execution, persistence, transformation, and test phases.
+- A precise Go module style covering domain file placement, import order,
+  handler/usecase/repository workflows, vertical GORM chains, and transaction
+  phase layout.
+- A precise TypeScript frontend style covering ES5 trailing commas, import and
+  declaration order, component rhythm, URL state, and feature file ownership.
 - Workspace-aware monorepo detection with path-scoped context profiles.
 - Explainable evidence, focused workspace installation, and validated stack
   overrides.
