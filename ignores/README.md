@@ -9,17 +9,17 @@ available.
 
 The installer can create one of these project-root files:
 
-| File | Consumer |
-| --- | --- |
-| `.cursorignore` | Cursor |
-| `.ignore` | OpenCode and OpenAI Codex file discovery |
-| `.geminiignore` | Gemini CLI |
-| `.aiderignore` | Aider |
-| `.continueignore` | Continue |
-| `.clineignore` | Cline; currently supported but being deprecated |
-| `.codeiumignore` | Windsurf |
-| `.rooignore` | Roo Code and compatible forks |
-| `.aiignore` | JetBrains Junie and AI Assistant |
+| `--ignore-agent` value | File | Consumer |
+| --- | --- | --- |
+| `cursor` | `.cursorignore` | Cursor |
+| `codex` | `.ignore` | OpenCode and OpenAI Codex file discovery |
+| `gemini` | `.geminiignore` | Gemini CLI |
+| `aider` | `.aiderignore` | Aider |
+| `continue` | `.continueignore` | Continue |
+| `cline` | `.clineignore` | Cline; currently supported but being deprecated |
+| `windsurf` | `.codeiumignore` | Windsurf |
+| `roo` | `.rooignore` | Roo Code and compatible forks |
+| `junie` | `.aiignore` | JetBrains Junie and AI Assistant |
 
 OpenCode does not natively support `.opencodeignore`; use `.ignore`. There is no
 authoritative native support for `.claudeignore`, `.codexignore`,

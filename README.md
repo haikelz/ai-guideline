@@ -89,6 +89,19 @@ curl -fsSL https://raw.githubusercontent.com/haikelz/ai-guideline/master/install
   | bash -s -- .
 ```
 
+To create one ignore file for the coding agent you use, add
+`--ignore-agent <agent>` after `bash -s --`:
+
+```bash
+# Codex/OpenCode: creates .ignore
+curl -fsSL https://raw.githubusercontent.com/haikelz/ai-guideline/master/install.sh \
+  | bash -s -- --ignore-agent codex .
+
+# Cursor: creates .cursorignore
+curl -fsSL https://raw.githubusercontent.com/haikelz/ai-guideline/master/install.sh \
+  | bash -s -- --ignore-agent cursor .
+```
+
 To install into another directory, replace `.` with its path. Arguments after
 `bash -s --` are passed to the installer, so options can be combined:
 
@@ -113,8 +126,8 @@ Review-first installation is safer than piping an uninspected moving branch:
 curl -fsSLo /tmp/ai-guideline-install.sh \
   https://raw.githubusercontent.com/haikelz/ai-guideline/master/install.sh
 less /tmp/ai-guideline-install.sh
-bash /tmp/ai-guideline-install.sh --dry-run .
-bash /tmp/ai-guideline-install.sh .
+bash /tmp/ai-guideline-install.sh --dry-run --ignore-agent codex .
+bash /tmp/ai-guideline-install.sh --ignore-agent codex .
 rm /tmp/ai-guideline-install.sh
 ```
 
