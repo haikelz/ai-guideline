@@ -69,7 +69,7 @@ printf '# Existing Cursor policy\nprivate-designs/\n' >"$next/.cursorignore"
 assert_no_file "$next/.agents"
 assert_not_contains "$next/.cursorignore" '# AI-GUIDELINES-IGNORE:BEGIN'
 
-"$INSTALLER" "$next" >/dev/null
+"$INSTALLER" --ignore-agent cursor "$next" >/dev/null
 assert_file "$next/.agents/general.md"
 assert_file "$next/.agents/preferences.md"
 assert_file "$next/.agents/guidelines/javascript-typescript.md"
@@ -84,18 +84,19 @@ assert_contains "$next/AGENTS.md" '`.agents/general.md` and `.agents/preferences
 assert_contains "$next/AGENTS.md" 'Do not read every installed companion by default.'
 assert_contains "$next/AGENTS.md" "- **Next.js UI or application work:** \`.agents/guidelines/javascript-typescript.md\`, \`.agents/guidelines/haikel-javascript-typescript.md\`, and \`.agents/guidelines/nextjs.md\`."
 assert_not_contains "$next/AGENTS.md" 'NestJS API or service work'
+assert_file "$next/.cursorignore"
+assert_count "$next/.cursorignore" '# AI-GUIDELINES-IGNORE:BEGIN' 1
 for ignore_file in \
-  .cursorignore .ignore .geminiignore .aiderignore .continueignore \
-  .clineignore .codeiumignore .rooignore .aiignore; do
-  assert_file "$next/$ignore_file"
-  assert_count "$next/$ignore_file" '# AI-GUIDELINES-IGNORE:BEGIN' 1
+  .ignore .geminiignore .aiderignore .continueignore .clineignore \
+  .codeiumignore .rooignore .aiignore; do
+  assert_no_file "$next/$ignore_file"
 done
 assert_contains "$next/.cursorignore" '# Existing Cursor policy'
 assert_contains "$next/.cursorignore" 'private-designs/'
 
 before=$(sha256_file "$next/AGENTS.md")
 ignore_before=$(sha256_file "$next/.cursorignore")
-"$INSTALLER" "$next" >/dev/null
+"$INSTALLER" --ignore-agent cursor "$next" >/dev/null
 after=$(sha256_file "$next/AGENTS.md")
 ignore_after=$(sha256_file "$next/.cursorignore")
 [[ "$before" == "$after" ]] || fail 'repeated installation is not deterministic'
@@ -103,7 +104,7 @@ ignore_after=$(sha256_file "$next/.cursorignore")
 
 sed 's/^\.env$/.env-broken/' "$next/.cursorignore" >"$next/.cursorignore.tmp"
 mv "$next/.cursorignore.tmp" "$next/.cursorignore"
-"$INSTALLER" "$next" >/dev/null
+"$INSTALLER" --ignore-agent cursor "$next" >/dev/null
 assert_contains "$next/.cursorignore" '# Existing Cursor policy'
 assert_line "$next/.cursorignore" '.env'
 assert_not_contains "$next/.cursorignore" '.env-broken'
@@ -177,11 +178,23 @@ assert_no_file "$typescript/.agents/guidelines/docker.md"
 without_ignores="$work/without-ignores"
 mkdir -p "$without_ignores"
 printf '{"devDependencies":{"typescript":"6.0.0"}}\n' >"$without_ignores/package.json"
-"$INSTALLER" --skip-ignore-files "$without_ignores" >/dev/null
+"$INSTALLER" "$without_ignores" >/dev/null
 assert_file "$without_ignores/.agents/guidelines/javascript-typescript.md"
 assert_file "$without_ignores/.agents/guidelines/haikel-javascript-typescript.md"
 assert_no_file "$without_ignores/.cursorignore"
 assert_no_file "$without_ignores/.ignore"
+
+codex="$work/codex-app"
+mkdir -p "$codex"
+printf '{"devDependencies":{"typescript":"6.0.0"}}\n' >"$codex/package.json"
+"$INSTALLER" --ignore-agent=codex "$codex" >/dev/null
+assert_file "$codex/.ignore"
+assert_no_file "$codex/.cursorignore"
+assert_count "$codex/.ignore" '# AI-GUIDELINES-IGNORE:BEGIN' 1
+
+if "$INSTALLER" --ignore-agent unknown "$codex" >/dev/null 2>&1; then
+  fail 'unsupported ignore agent was accepted'
+fi
 
 astro="$work/astro-monorepo"
 mkdir -p "$astro/apps/web"
@@ -359,7 +372,7 @@ assert_no_file "$malformed/.agents"
 malformed_ignore="$work/malformed-ignore"
 mkdir -p "$malformed_ignore"
 printf '# AI-GUIDELINES-IGNORE:END\n# AI-GUIDELINES-IGNORE:BEGIN\n' >"$malformed_ignore/.cursorignore"
-if "$INSTALLER" "$malformed_ignore" >/dev/null 2>&1; then
+if "$INSTALLER" --ignore-agent cursor "$malformed_ignore" >/dev/null 2>&1; then
   fail 'reversed ignore markers were accepted'
 fi
 assert_no_file "$malformed_ignore/.agents"
@@ -374,12 +387,12 @@ printf '{"dependencies":{"next":"15.0.0"}}\n' >"$remote/package.json"
 assert_no_file "$remote/.agents"
 (
   cd "$work"
-  AI_GUIDELINE_BASE_URL="file://$ROOT" bash -s -- "$remote" <"$INSTALLER"
+  AI_GUIDELINE_BASE_URL="file://$ROOT" bash -s -- --ignore-agent codex "$remote" <"$INSTALLER"
 ) >/dev/null
 assert_file "$remote/.agents/guidelines/nextjs.md"
 assert_file "$remote/.agents/guidelines/docker.md"
-assert_file "$remote/.cursorignore"
 assert_file "$remote/.ignore"
+assert_no_file "$remote/.cursorignore"
 
 tampered_mirror="$work/tampered-mirror"
 tampered_target="$work/tampered-target"
@@ -401,7 +414,7 @@ mkdir -p "$reviewed"
 printf '{"dependencies":{"astro":"7.0.0"}}\n' >"$reviewed/package.json"
 cp "$INSTALLER" "$work/downloaded-install.sh"
 AI_GUIDELINE_BASE_URL="file://$ROOT" \
-  bash "$work/downloaded-install.sh" "$reviewed" >/dev/null
+  bash "$work/downloaded-install.sh" --ignore-agent gemini "$reviewed" >/dev/null
 assert_file "$reviewed/.agents/guidelines/astro.md"
 assert_file "$reviewed/.agents/guidelines/docker.md"
 assert_file "$reviewed/.geminiignore"

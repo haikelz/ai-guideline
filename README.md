@@ -131,18 +131,11 @@ before running it.
 content mirror. `AI_GUIDELINE_REF` defaults to the moving `master` branch; set it
 to an immutable release tag or full commit SHA for reproducible installation.
 
-The installer writes this project-local layout:
+The installer writes this project-local layout; the agent ignore file appears
+only when `--ignore-agent` is selected:
 
 ```text
-.cursorignore
-.ignore
-.geminiignore
-.aiderignore
-.continueignore
-.clineignore
-.codeiumignore
-.rooignore
-.aiignore
+<selected-agent-ignore-file>
 AGENTS.md
 .agents/
 ├── general.md
@@ -257,10 +250,11 @@ managed markers and refuses to install into this source repository.
 
 ### Coding-agent ignore files
 
-By default, the installer creates or updates the supported ignore files listed
-above. They share a conservative block for secrets, credentials, dependencies,
-generated output, caches, local state, logs, temporary files, and compiled
-binaries. Existing project-specific content is preserved outside these markers:
+Select the coding agent that will use the project; the installer creates or
+updates only that agent's native ignore file. The shared block excludes secrets,
+credentials, dependencies, generated output, caches, local state, logs,
+temporary files, and compiled binaries. Existing project-specific content is
+preserved outside these markers:
 
 ```text
 # AI-GUIDELINES-IGNORE:BEGIN
@@ -268,11 +262,17 @@ binaries. Existing project-specific content is preserved outside these markers:
 # AI-GUIDELINES-IGNORE:END
 ```
 
-Skip ignore-file installation when a project manages these policies elsewhere:
+For example, generate the Cursor or Codex/OpenCode ignore file:
 
 ```bash
-./install.sh --skip-ignore-files /path/to/project
+./install.sh --ignore-agent cursor /path/to/project
+./install.sh --ignore-agent codex /path/to/project
 ```
+
+Supported agents are `cursor`, `codex`, `gemini`, `aider`, `continue`, `cline`,
+`windsurf`, `roo`, and `junie`. Omit `--ignore-agent` when the project manages
+these policies elsewhere; `--skip-ignore-files` remains available for existing
+automation.
 
 OpenCode does not support `.opencodeignore`; its supported generic file is
 `.ignore`, which is also used by Codex file discovery. Unsupported names such as

@@ -43,6 +43,7 @@ trap cleanup EXIT
 dry_run=0
 force=0
 skip_ignore_files=0
+ignore_agent=''
 show_version=0
 explain=0
 workspace_instructions=0
@@ -64,6 +65,10 @@ Options:
   --force            Overwrite locally modified installed guidelines.
   --include STACK    Include a supported stack; may be repeated.
   --exclude STACK    Exclude a supported stack; may be repeated.
+  --ignore-agent AGENT
+                     Create or update one ignore file for the selected agent.
+                     Supported: cursor, codex, gemini, aider, continue, cline,
+                     windsurf, roo, junie.
   --skip-ignore-files Do not create or update coding-agent ignore files.
   --workspace PATH   Install only for one workspace below the target root.
   --workspace-instructions
@@ -75,7 +80,7 @@ Installed layout:
   .agents/general.md
   .agents/guidelines/*.md
   AGENTS.md managed link block
-  Supported coding-agent ignore files in the project root
+  One selected coding-agent ignore file in the project root
 EOF
 }
 
@@ -91,7 +96,7 @@ while (($#)); do
     --force)
       force=1
       ;;
-    --include | --exclude | --workspace)
+    --include | --exclude | --workspace | --ignore-agent)
       option=$1
       if (($# < 2)); then
         printf 'install.sh: %s requires a value\n' "$option" >&2
@@ -102,9 +107,10 @@ while (($#)); do
         --include) include_args+=("$1") ;;
         --exclude) exclude_args+=("$1") ;;
         --workspace) workspace_arg=$1 ;;
+        --ignore-agent) ignore_agent=$1 ;;
       esac
       ;;
-    --include=* | --exclude=* | --workspace=*)
+    --include=* | --exclude=* | --workspace=* | --ignore-agent=*)
       option=${1%%=*}
       value=${1#*=}
       if [[ -z "$value" ]]; then
@@ -115,6 +121,7 @@ while (($#)); do
         --include) include_args+=("$value") ;;
         --exclude) exclude_args+=("$value") ;;
         --workspace) workspace_arg=$value ;;
+        --ignore-agent) ignore_agent=$value ;;
       esac
       ;;
     --skip-ignore-files)
@@ -577,17 +584,30 @@ if contains_word "$all_stacks" 'docker'; then
   add_selected 'guidelines/docker.md'
 fi
 
-ignore_files=(
-  '.cursorignore'
-  '.ignore'
-  '.geminiignore'
-  '.aiderignore'
-  '.continueignore'
-  '.clineignore'
-  '.codeiumignore'
-  '.rooignore'
-  '.aiignore'
-)
+ignore_files=()
+
+if ((skip_ignore_files)) && [[ -n "$ignore_agent" ]]; then
+  printf 'install.sh: --skip-ignore-files cannot be combined with --ignore-agent\n' >&2
+  exit 2
+fi
+
+case "$ignore_agent" in
+  '') ;;
+  cursor) ignore_files=('.cursorignore') ;;
+  codex) ignore_files=('.ignore') ;;
+  gemini) ignore_files=('.geminiignore') ;;
+  aider) ignore_files=('.aiderignore') ;;
+  continue) ignore_files=('.continueignore') ;;
+  cline) ignore_files=('.clineignore') ;;
+  windsurf) ignore_files=('.codeiumignore') ;;
+  roo) ignore_files=('.rooignore') ;;
+  junie) ignore_files=('.aiignore') ;;
+  *)
+    printf 'install.sh: unsupported ignore agent: %s\n' "$ignore_agent" >&2
+    printf 'Supported agents: cursor, codex, gemini, aider, continue, cline, windsurf, roo, junie\n' >&2
+    exit 2
+    ;;
+esac
 
 if [[ -z "$source_dir" ]]; then
   if ! command -v curl >/dev/null 2>&1; then
@@ -626,7 +646,7 @@ if [[ -z "$source_dir" ]]; then
     fi
     verify_checksum "$source_dir/$source_rel" "$source_rel" "$source_dir/$CHECKSUMS_FILE"
   done
-  if ((!skip_ignore_files)); then
+  if ((${#ignore_files[@]})); then
     mkdir -p "$source_dir/ignores"
     if ! curl -fsSL --retry 3 "$remote_base_url/ignores/agent.ignore" -o "$source_dir/ignores/agent.ignore"; then
       printf 'install.sh: failed to download ignores/agent.ignore\n' >&2
@@ -733,7 +753,7 @@ validate_managed_block() {
 agents_file="$TARGET/AGENTS.md"
 validate_managed_block "$agents_file" "$BEGIN_MARKER" "$END_MARKER"
 
-if ((!skip_ignore_files)); then
+if ((${#ignore_files[@]})); then
   if [[ ! -f "$source_dir/ignores/agent.ignore" ]]; then
     printf 'install.sh: ignore template source is missing: ignores/agent.ignore\n' >&2
     exit 2
@@ -833,7 +853,7 @@ if ((explain)); then
 fi
 printf 'Guidelines:\n'
 printf '  %s\n' "${selected[@]}"
-if ((!skip_ignore_files)); then
+if ((${#ignore_files[@]})); then
   printf 'Agent ignore files:\n'
   printf '  %s\n' "${ignore_files[@]}"
 fi
@@ -1105,7 +1125,7 @@ if ((workspace_instructions)); then
   workspace_state_tmp=''
 fi
 
-if ((!skip_ignore_files)); then
+if ((${#ignore_files[@]})); then
   for ignore_file in "${ignore_files[@]}"; do
     write_managed_block \
       "$TARGET/$ignore_file" \

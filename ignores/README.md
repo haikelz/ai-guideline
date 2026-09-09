@@ -1,12 +1,13 @@
 # Coding-Agent Ignore Files
 
-`agent.ignore` is the canonical managed block installed into each supported
-agent-specific ignore file. The patterns exclude secrets, credentials,
-dependencies, generated output, caches, local state, logs, temporary files, and
-compiled binaries while keeping source, documentation, migrations, lockfiles,
-public assets, and `.agents` guidelines available.
+`agent.ignore` is the canonical managed block installed into the selected
+agent-specific ignore file with `--ignore-agent <agent>`. The patterns exclude
+secrets, credentials, dependencies, generated output, caches, local state,
+logs, temporary files, and compiled binaries while keeping source,
+documentation, migrations, lockfiles, public assets, and `.agents` guidelines
+available.
 
-The installer creates these project-root files:
+The installer can create one of these project-root files:
 
 | File | Consumer |
 | --- | --- |
