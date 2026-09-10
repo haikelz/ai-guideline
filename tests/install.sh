@@ -80,7 +80,7 @@ assert_no_file "$next/.agents/guidelines/nestjs.md"
 assert_contains "$next/AGENTS.md" '# Existing instructions'
 assert_count "$next/AGENTS.md" '<!-- AI-GUIDELINES:BEGIN -->' 1
 assert_contains "$next/AGENTS.md" 'select the smallest matching context profile'
-assert_contains "$next/AGENTS.md" '`.agents/general.md` and `.agents/preferences.md`'
+assert_contains "$next/AGENTS.md" "\`.agents/general.md\` and \`.agents/preferences.md\`"
 assert_contains "$next/AGENTS.md" 'Do not read every installed companion by default.'
 assert_contains "$next/AGENTS.md" "- **Next.js UI or application work:** \`.agents/guidelines/javascript-typescript.md\`, \`.agents/guidelines/haikel-javascript-typescript.md\`, and \`.agents/guidelines/nextjs.md\`."
 assert_not_contains "$next/AGENTS.md" 'NestJS API or service work'
