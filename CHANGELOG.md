@@ -11,6 +11,8 @@ All notable changes to this project are documented here. Releases follow
   every supported ignore-file variant by default.
 - Go presentation guidance now makes the reference services' route, input, and
   direct-delegation spacing conventions explicit.
+- Shared whitespace conventions now apply those route, input, and delegation
+  rules across Go and JavaScript/TypeScript work.
 - A project-wide owner preference profile covering complete-scope cleanup,
   semantic code rhythm, preferred React tooling, non-generic interface design,
   natural Indonesian and English writing, verification, and Git delivery.

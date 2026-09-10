@@ -42,6 +42,13 @@ Shorter code is not automatically cleaner code.
   blank line after that unit, not between the operation and its check.
 - Keep related validations and assignments together. Do not add blank lines
   mechanically after every statement.
+- Keep framework registration and configuration as one contiguous block. Add a
+  blank line only when a separate group marks a real scope, access, or lifecycle
+  boundary.
+- Keep parsed or bound input beside its validation. Start a new visual group
+  only after that input phase succeeds.
+- Keep simple delegation as a direct return. Do not introduce a temporary value
+  solely to manufacture spacing; reserve visual phases for distinct concerns.
 - Prefer vertical forms when a declaration, call, condition, callback, or
   literal contains several meaningful parts. Dense one-line code that technically
   passes formatting is not acceptable when expansion improves scanning.
