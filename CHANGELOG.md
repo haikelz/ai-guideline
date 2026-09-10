@@ -9,6 +9,8 @@ All notable changes to this project are documented here. Releases follow
 
 - `--ignore-agent` selects one coding-agent ignore file instead of generating
   every supported ignore-file variant by default.
+- Go presentation guidance now makes the reference services' route, input, and
+  direct-delegation spacing conventions explicit.
 - A project-wide owner preference profile covering complete-scope cleanup,
   semantic code rhythm, preferred React tooling, non-generic interface design,
   natural Indonesian and English writing, verification, and Git delivery.

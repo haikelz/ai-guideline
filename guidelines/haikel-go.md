@@ -128,6 +128,16 @@ groups of related statements, not from line count.
 - For a multiline GORM chain, put one operation per line and leave the period at
   the end of the preceding line. Keep the terminal operation and `.Error`
   visible at the end of the chain.
+- Keep route registration as one contiguous block. Add one blank line only when
+  a separate route group marks a different access boundary.
+- Keep a request declaration, bind, and validation checks adjacent because they
+  are one input phase. Start a new visual group only after that phase succeeds.
+- Keep a simple delegation as a direct return. Do not introduce a temporary
+  result solely to manufacture spacing; reserve phase spacing for work that has
+  more than one concern.
+- Place a parsed path or query value beside its validation. Add a blank line
+  before binding the body or invoking a usecase, not between the parse and its
+  error check.
 
 Preferred handler rhythm:
 
