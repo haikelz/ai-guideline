@@ -54,14 +54,18 @@ internal/domains/<domain>/
 ## 2. Formatting, Imports, and Naming
 
 - Target the Go version declared by `go.mod`.
-- Run `gofmt -s` for every changed Go file and `goimports` with the module-local
-  prefix when the project adopts it. Formatter output is authoritative.
+- Run `gofmt -s` for every changed Go file. When the project uses `goimports`,
+  run it without `-local` for this import order, unless repository tooling
+  explicitly requires another order; inspect the resulting groups afterward.
+  Formatter output is authoritative for indentation and alignment.
 - Treat whitespace as part of readability. The formatter owns indentation and
   alignment; the developer still owns intentional blank lines between semantic
   phases.
 - Keep import groups as standard library, module-local, then third-party. Use one
-  blank line between groups and no blank lines within a group. This profile's
-  order takes precedence over the generic Go profile.
+  blank line between groups and no blank lines within a group. Sort imports
+  within each group; do not use `goimports -local <module-path>` to enforce this
+  profile, because that flag moves module-local imports *after* third-party
+  imports. Follow repository-enforced import tooling if it requires otherwise.
 - Alias an import only to resolve a collision or make a non-obvious package
   identity explicit. Keep an established explicit alias consistent throughout a
   package.
@@ -138,6 +142,12 @@ groups of related statements, not from line count.
 - Place a parsed path or query value beside its validation. Add a blank line
   before binding the body or invoking a usecase, not between the parse and its
   error check.
+- Group dependency guards together, then separate them from domain checks and
+  I/O. Keep adjacent guards for the same invariant together; do not insert a
+  blank line simply because an `if` returned.
+- For short repository methods, keep the query, its error check, and the final
+  return together when they form one lookup. Add a blank line before the return
+  only when mapping or another distinct phase follows the check.
 
 Preferred handler rhythm:
 
@@ -162,6 +172,31 @@ func (h *Handler) Update(c echo.Context) error {
 	}
 
 	return respondSuccess(c, result)
+}
+```
+
+Preferred usecase rhythm (the blank lines separate different concerns, not
+every error check):
+
+```go
+func (u *orderUsecase) Assign(ctx context.Context, orderID, driverID uuid.UUID) error {
+	if u.repository == nil {
+		return ErrRepositoryUnavailable
+	}
+	if driverID == uuid.Nil {
+		return ErrInvalidDriver
+	}
+
+	order, err := u.repository.FindByID(ctx, orderID)
+	if err != nil {
+		return err
+	}
+
+	if order.Status != StatusSearching {
+		return ErrInvalidStateTransition
+	}
+
+	return u.repository.AssignDriver(ctx, orderID, driverID)
 }
 ```
 
@@ -280,7 +315,6 @@ err := r.db.WithContext(ctx).
 if err != nil {
 	return nil, err
 }
-
 return &order, nil
 ```
 

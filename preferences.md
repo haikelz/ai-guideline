@@ -59,9 +59,10 @@ Shorter code is not automatically cleaner code.
   idioms compact when expansion would add no clarity.
 - Constructors should show their dependency mapping explicitly. Avoid compressed
   constructor returns and hidden initialization work.
-- Keep imports in the repository's mechanical order. In Go, group standard
-  library, third-party, and module-local imports. In TypeScript, preserve the
-  configured import ordering and separate types when tooling supports it.
+- Keep imports in the repository's mechanical order. In Go, prefer standard
+  library, module-local, then third-party groups when no repository rule
+  overrides this profile. In TypeScript, preserve the configured import
+  ordering and separate types when tooling supports it.
 - Avoid vague names, one-use wrappers, generic helpers, and abstractions that
   merely relocate code. A new name should expose ownership, remove meaningful
   duplication, or simplify a real boundary.

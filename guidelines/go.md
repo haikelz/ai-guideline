@@ -344,10 +344,10 @@ truth; visual alignment produced by hand is not.
 - Imports **MUST** be sorted mechanically with the repository's configured tool.
   Prefer `goimports` when the repository has adopted it; otherwise use standard
   Go tooling.
-- Import blocks SHOULD contain, in order, standard-library, third-party, and
-  module-local groups separated by one blank line.
-- The module-local prefix SHOULD be configured explicitly when `goimports` is an
-  enforced tool.
+- Import blocks SHOULD group standard-library, module-local, and third-party
+  imports with one blank line between groups. Follow the repository's enforced
+  group order; otherwise prefer that order. `goimports -local <module-path>`
+  places module-local imports last, so use it only if that order is required.
 - Import aliases require a collision, generated API, or clearer domain name.
   They **MUST NOT** compensate for poor package naming.
 - Dot imports are prohibited outside narrowly justified test conventions.
@@ -423,7 +423,7 @@ Typical commands are:
 
 ```bash
 gofmt -s -w <changed-go-files>
-goimports -local <module-path> -w <changed-go-files> # when configured
+goimports -w <changed-go-files> # when configured; use repository-required flags
 go test ./path/to/affected/package/...
 go vet ./path/to/affected/package/...
 ```
@@ -432,7 +432,7 @@ Typical non-mutating CI checks are:
 
 ```bash
 test -z "$(gofmt -l .)"
-test -z "$(goimports -local <module-path> -l .)" # when configured
+test -z "$(goimports -l .)" # when configured; use repository-required flags
 go vet ./...
 golangci-lint run ./... # when configured and pinned
 ```
