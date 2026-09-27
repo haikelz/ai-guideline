@@ -175,6 +175,44 @@ assert_file "$typescript/.agents/guidelines/javascript-typescript.md"
 assert_file "$typescript/.agents/guidelines/haikel-javascript-typescript.md"
 assert_no_file "$typescript/.agents/guidelines/docker.md"
 
+decision_repo="$work/decision-monorepo"
+mkdir -p "$decision_repo/apps/triage" "$decision_repo/apps/portal" "$decision_repo/services/worker"
+printf 'packages:\n  - apps/*\n' >"$decision_repo/pnpm-workspace.yaml"
+printf '{"dependencies":{"@typesafe-ai/sdk":"^0.6.0"}}\n' >"$decision_repo/apps/triage/package.json"
+printf '{"dependencies":{"next":"15.0.0"}}\n' >"$decision_repo/apps/portal/package.json"
+printf 'dependencies = ["typesafe-sdk>=1.0"]\n' >"$decision_repo/services/worker/pyproject.toml"
+decision_output=$("$INSTALLER" --explain "$decision_repo")
+assert_text_contains "$decision_output" 'apps/triage: javascript-typescript typesafe-ai'
+assert_text_contains "$decision_output" 'services/worker: typesafe-ai'
+assert_text_not_contains "$decision_output" 'apps/portal: javascript-typescript nextjs docker typesafe-ai'
+"$INSTALLER" --workspace-instructions "$decision_repo" >/dev/null
+assert_file "$decision_repo/.agents/guidelines/typesafe-ai.md"
+assert_contains "$decision_repo/apps/triage/AGENTS.md" 'guidelines/typesafe-ai.md'
+assert_contains "$decision_repo/services/worker/AGENTS.md" 'guidelines/typesafe-ai.md'
+assert_not_contains "$decision_repo/apps/portal/AGENTS.md" 'guidelines/typesafe-ai.md'
+
+printf '[tool.poetry.dependencies]\ntypesafe-sdk = "^1.0"\n' >"$decision_repo/services/worker/pyproject.toml"
+decision_output=$("$INSTALLER" --explain "$decision_repo")
+assert_text_contains "$decision_output" 'services/worker: typesafe-ai'
+
+python_req="$work/python-requirements"
+mkdir -p "$python_req"
+printf '# typesafe-sdk\ntypesafe-sdk[http2]>=1.0\n' >"$python_req/requirements.txt"
+"$INSTALLER" "$python_req" >/dev/null
+assert_file "$python_req/.agents/guidelines/typesafe-ai.md"
+printf '# typesafe-sdk\nother-package>=1.0\n' >"$python_req/requirements.txt"
+"$INSTALLER" "$python_req" >/dev/null
+assert_no_file "$python_req/.agents/guidelines/typesafe-ai.md"
+
+http_client="$work/http-decision-client"
+mkdir -p "$http_client"
+"$INSTALLER" --include typesafe-ai "$http_client" >/dev/null
+assert_file "$http_client/.agents/guidelines/typesafe-ai.md"
+assert_no_file "$http_client/.agents/guidelines/javascript-typescript.md"
+assert_contains "$http_client/AGENTS.md" 'TypeSafe AI or Jev decision work'
+"$INSTALLER" --exclude typesafe-ai "$decision_repo/apps/triage" >/dev/null
+assert_no_file "$decision_repo/apps/triage/.agents/guidelines/typesafe-ai.md"
+
 without_ignores="$work/without-ignores"
 mkdir -p "$without_ignores"
 printf '{"devDependencies":{"typescript":"6.0.0"}}\n' >"$without_ignores/package.json"

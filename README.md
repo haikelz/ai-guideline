@@ -57,6 +57,12 @@ transactions, migrations, and deployment.
   multi-stage builds, BuildKit, runtime security, Compose, health checks,
   migrations, CI delivery, and Kubernetes interoperability.
 
+### AI decision systems
+
+- [`guidelines/typesafe-ai.md`](guidelines/typesafe-ai.md) — TypeSafe System One
+  and Jev question design, probabilities, policy composition, safe execution,
+  and evaluation.
+
 ## Automated Installation
 
 `install.sh` recursively detects supported stacks, including applications in a
@@ -309,12 +315,26 @@ terminal or plugin tools.
 | Fiber module in `go.mod` | Fiber, in addition to Go |
 | GORM plus a PostgreSQL driver in the same `go.mod` | GORM and PostgreSQL, in addition to Go |
 | Dockerfile or Compose file | Docker |
+| `@typesafe-ai/sdk` in `package.json` | TypeSafe AI, in addition to JavaScript and TypeScript |
+| `typesafe-sdk` in `pyproject.toml` or `requirements.txt` | TypeSafe AI |
 
 Generated output, dependencies, VCS metadata, vendor trees, caches, and an
 existing `.agents` directory are excluded from detection. Detection does not
 execute project code or read environment files. Paths containing spaces are
 supported; paths containing control characters or Markdown backticks are
 rejected when generating scoped instructions.
+
+For direct HTTP integrations without an SDK dependency, use
+`./install.sh --include typesafe-ai /path/to/project`, or from the project root:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/haikelz/ai-guideline/master/install.sh \
+  | bash -s -- --include typesafe-ai .
+```
+
+In a monorepo, automatic detection scopes the profile to the workspace that
+declares the SDK dependency. For a direct HTTP integration in a specific
+workspace, use `--workspace PATH --include typesafe-ai`.
 
 ## Usage
 

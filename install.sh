@@ -349,7 +349,7 @@ remove_workspace_stack() {
 
 valid_stack() {
   case "$1" in
-    javascript-typescript | astro | nextjs | nestjs | go | echo | fiber | gorm-postgresql | docker) return 0 ;;
+    javascript-typescript | astro | nextjs | nestjs | go | echo | fiber | gorm-postgresql | docker | typesafe-ai) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -376,6 +376,9 @@ while IFS= read -r -d '' project_file; do
       add_workspace_stack "$workspace" 'javascript-typescript' "$source"
       if grep -Eq '"workspaces"[[:space:]]*:' "$project_file"; then
         monorepo_markers+=("$source")
+      fi
+      if grep -Eq '"@typesafe-ai/sdk"[[:space:]]*:' "$project_file"; then
+        add_workspace_stack "$workspace" 'typesafe-ai' "$source"
       fi
       if grep -Eq '"astro"[[:space:]]*:' "$project_file"; then
         add_workspace_stack "$workspace" 'astro' "$source"
@@ -420,6 +423,11 @@ while IFS= read -r -d '' project_file; do
         add_workspace_stack "$workspace" 'gorm-postgresql' "$source"
       fi
       ;;
+    pyproject.toml | requirements.txt)
+      if grep -Eiq "^[[:space:]]*['\"]?typesafe-sdk(\[|[[:space:]'\"=<>!~;#]|\$)|[=\[,][[:space:]]*['\"]typesafe-sdk(\[|[[:space:]'\"=<>!~;#]|\$)" "$project_file"; then
+        add_workspace_stack "$workspace" 'typesafe-ai' "$source"
+      fi
+      ;;
     Dockerfile* | docker-compose*.yml | docker-compose*.yaml | compose*.yml | compose*.yaml)
       add_workspace_stack "$workspace" 'docker' "$source"
       ;;
@@ -436,6 +444,8 @@ done < <(find_project_files -type f \( \
   -name 'next.config.*' -o \
   -name nest-cli.json -o \
   -name go.mod -o \
+  -name pyproject.toml -o \
+  -name requirements.txt -o \
   -name 'Dockerfile*' -o \
   -name 'docker-compose*.yml' -o \
   -name 'docker-compose*.yaml' -o \
@@ -504,7 +514,7 @@ for stack in "${exclude_args[@]:-}"; do
   [[ -z "$stack" ]] || remove_workspace_stack "$stack"
 done
 
-stack_order=(javascript-typescript astro nextjs nestjs go echo fiber gorm-postgresql docker)
+stack_order=(javascript-typescript astro nextjs nestjs go echo fiber gorm-postgresql docker typesafe-ai)
 for index in "${!workspace_stacks[@]}"; do
   stacks=${workspace_stacks[$index]}
   ordered_stacks=''
@@ -582,6 +592,10 @@ fi
 if contains_word "$all_stacks" 'docker'; then
   add_detected 'docker'
   add_selected 'guidelines/docker.md'
+fi
+if contains_word "$all_stacks" 'typesafe-ai'; then
+  add_detected 'typesafe-ai'
+  add_selected 'guidelines/typesafe-ai.md'
 fi
 
 ignore_files=()
@@ -684,7 +698,8 @@ destination_for() {
       guidelines/haikel-javascript-typescript.md | \
       guidelines/javascript-typescript.md | \
       guidelines/nestjs.md | \
-      guidelines/nextjs.md)
+      guidelines/nextjs.md | \
+      guidelines/typesafe-ai.md)
       printf '%s/.agents/%s\n' "$TARGET" "$1"
       ;;
     *)
@@ -975,6 +990,10 @@ render_context_profiles() {
   if contains_word "$stacks" 'docker'; then
     printf -- '- **Container, Compose, delivery, or runtime work:** %s; add an application profile only when its build or runtime behavior also changes.\n' \
       "$(markdown_path "$prefix" 'guidelines/docker.md')"
+  fi
+  if contains_word "$stacks" 'typesafe-ai'; then
+    printf -- '- **TypeSafe AI or Jev decision work:** %s; add the applicable language or framework profile only when its code also changes.\n' \
+      "$(markdown_path "$prefix" 'guidelines/typesafe-ai.md')"
   fi
   printf '%s\n' '- **Cross-cutting work:** use the union of only the affected profiles and state why each additional document is needed.'
 }

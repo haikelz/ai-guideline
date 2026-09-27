@@ -7,6 +7,8 @@ All notable changes to this project are documented here. Releases follow
 
 ### Added
 
+- A TypeSafe AI and Jev decision-system guideline with scoped SDK detection,
+  explicit inclusion for HTTP clients, and workspace-specific context profiles.
 - `--ignore-agent` selects one coding-agent ignore file instead of generating
   every supported ignore-file variant by default.
 - Go presentation guidance now makes the reference services' route, input, and
