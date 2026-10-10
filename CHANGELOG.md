@@ -5,12 +5,36 @@ All notable changes to this project are documented here. Releases follow
 
 ## [Unreleased]
 
+### Changed
+
+- `general.md` now holds only every-task rules and the single precedence chain
+  (§2); setup, documentation, CI, and process guidance moved to the new
+  `harness.md`, which defers to a repository's own harness workflow. Every
+  guideline header points to that chain.
+- Echo guidance targets v5 first, Next.js guidance targets 16, and Zod examples
+  use the v4 API. Base and framework guides no longer contradict the `haikel-*`
+  owner profiles.
+- Docker guidance defaults to a single-host Dokploy profile, adds Bun images,
+  and fixes the pnpm, Go builder, and distroless healthcheck examples.
+- The agent ignore template anchors root-only build directories, covers more
+  secret files, and keeps example env files visible.
+- The installer warns when `.agents/` is ignored by Git.
+
 ### Added
 
 - A TypeSafe AI and Jev decision-system guideline with scoped SDK detection,
   explicit inclusion for HTTP clients, and workspace-specific context profiles.
 - `--ignore-agent` selects one coding-agent ignore file instead of generating
   every supported ignore-file variant by default.
+- The installer creates a root `GEMINI.md` that imports `AGENTS.md` when the
+  project has `.gemini/` or uses `--ignore-agent gemini`, and warns when an
+  existing `GEMINI.md` does not import it.
+- The `haikel-*` profiles and their base language guidelines now state that the
+  profile wins on conflict.
+- The Go and TypeScript owner profiles were re-derived from the newest reference
+  services: handler route registration, error-to-message mapping, transaction
+  helpers, list contracts, React Query hook modules, a shared request client,
+  readonly props, ternary-null rendering, and `trailingComma: "all"`.
 - Go presentation guidance now makes the reference services' route, input, and
   direct-delegation spacing conventions explicit.
 - Shared whitespace conventions now apply those route, input, and delegation
