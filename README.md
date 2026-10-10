@@ -9,9 +9,12 @@ transactions, migrations, and deployment.
 
 ### Project-wide
 
-- [`general.md`](general.md) — repository setup, engineering harness, sources of
-  truth, Git-native planning, authority, documentation, verification, CI,
-  runbooks, and measured process improvement.
+- [`general.md`](general.md) — rules every task follows: precedence, mutation
+  authority, proof, honest reporting, secrets, dependencies, Git, migrations,
+  and definition of done.
+- [`harness.md`](harness.md) — repository setup, `AGENTS.md`, README,
+  documentation, ADRs, planning, CI, hooks, and runbooks. Agents read it only
+  for setup or process work, and it defers to a repository's own harness.
 - [`preferences.md`](preferences.md) — owner's cross-stack quality profile for
   code rhythm, complete-scope cleanup, frontend libraries, interface design,
   natural writing, verification, and Git delivery.
@@ -26,8 +29,9 @@ transactions, migrations, and deployment.
 - [`guidelines/javascript-typescript.md`](guidelines/javascript-typescript.md) —
   language-level JavaScript and TypeScript rules.
 - [`guidelines/haikel-javascript-typescript.md`](guidelines/haikel-javascript-typescript.md) —
-  owner's TypeScript profile: exact Biome formatting, import and declaration
-  order, React/Next feature structure, typed data boundaries, and verification.
+  owner's TypeScript profile: Prettier defaults, import and declaration order,
+  React/Next feature structure, React Query hooks, typed data boundaries, and
+  verification.
 - [`guidelines/astro.md`](guidelines/astro.md) — Astro rendering modes,
   file-based routing, content collections, islands, UI integrations, CMS and
   i18n boundaries, web quality, testing, and static deployment.
@@ -150,15 +154,20 @@ before running it.
 content mirror. `AI_GUIDELINE_REF` defaults to the moving `master` branch; set it
 to an immutable release tag or full commit SHA for reproducible installation.
 
-The installer writes this project-local layout; the agent ignore file appears
-only when `--ignore-agent` is selected:
+The installer writes this project-local layout. The agent ignore file appears
+only when `--ignore-agent` is selected. `GEMINI.md` (containing `@./AGENTS.md`)
+appears only when the project has `.gemini/` or uses `--ignore-agent gemini`;
+an existing `GEMINI.md` is left alone with a warning if it does not import
+`AGENTS.md`.
 
 ```text
 <selected-agent-ignore-file>
 AGENTS.md
+GEMINI.md                     # only for Gemini projects
 .agents/
 ├── general.md
 ├── preferences.md
+├── harness.md
 ├── .ai-guideline-manifest
 ├── .ai-guideline-workspaces  # only with --workspace-instructions
 └── guidelines/
@@ -175,11 +184,16 @@ preserved:
 <!-- AI-GUIDELINES:END -->
 ```
 
+Commit `.agents/` with the project. If Git ignores it, `AGENTS.md` links to
+files that do not exist in fresh clones, CI, or worktrees; the installer prints a
+warning in that case.
+
 ### Context profiles
 
 The managed `AGENTS.md` block composes task-oriented context profiles from the
 detected stack. Every task reads `general.md` and `preferences.md`, then loads
-only the smallest matching companion set. For example, a repository containing
+only the smallest matching companion set. Setup, documentation, CI, and process
+work also loads `harness.md`. For example, a repository containing
 a Next.js app and Docker configuration receives separate profiles for JavaScript
 or TypeScript, Next.js application work, and container or delivery work. A
 UI-only task does not load the Docker guideline, and a Docker-only task does not
@@ -249,7 +263,7 @@ exclude docker
 ```
 
 Supported names are `javascript-typescript`, `astro`, `nextjs`, `nestjs`, `go`,
-`echo`, `fiber`, `gorm-postgresql`, and `docker`. Unknown names, malformed lines,
+`echo`, `fiber`, `gorm-postgresql`, `docker`, and `typesafe-ai`. Unknown names, malformed lines,
 duplicate include/exclude conflicts, and framework selections without their
 language dependency are rejected before files are written. An explicit Docker
 exclusion is allowed when a project does not use containers.
@@ -318,6 +332,10 @@ terminal or plugin tools.
 | `@typesafe-ai/sdk` in `package.json` | TypeSafe AI, in addition to JavaScript and TypeScript |
 | `typesafe-sdk` in `pyproject.toml` or `requirements.txt` | TypeSafe AI |
 
+The owner profile installs with its base language guideline:
+`haikel-javascript-typescript.md` with JavaScript and TypeScript, and
+`haikel-go.md` with Go. It cannot be excluded separately.
+
 Generated output, dependencies, VCS metadata, vendor trees, caches, and an
 existing `.agents` directory are excluded from detection. Detection does not
 execute project code or read environment files. Paths containing spaces are
@@ -340,16 +358,11 @@ workspace, use `--workspace PATH --include typesafe-ai`.
 
 Use `general.md` and `preferences.md` as the project-wide baseline, then load
 only the applicable language, framework, persistence, and infrastructure
-companions. These guidelines do not replace repository-local rules. The order
-of precedence is:
-
-1. The current requirements and acceptance criteria.
-2. Repository-local rules such as `AGENTS.md`, `CLAUDE.md`, ADRs, and domain
-   documentation.
-3. The codebase's architecture, public contracts, formatter, linter, and dominant
-   conventions.
-4. The applicable language, framework, and persistence guidelines in this
-   directory.
+companions. These guidelines do not replace repository-local rules. The single
+precedence chain lives in [`general.md` §2](general.md#2-requirement-language-and-precedence):
+the request, then repository-local instructions and contracts, then tooling
+configuration, then the `haikel-*` owner profile, then `preferences.md`, then
+framework guides, then base language guides, then `general.md` and `harness.md`.
 
 When an existing codebase conflicts with these guidelines, the agent must
 distinguish contracts that must remain compatible from technical debt that must not
@@ -385,7 +398,7 @@ version or publishing a tag.
    it in the database where possible, and prove it with tests.
 6. **Intentional compatibility.** Do not accidentally change routes, schemas,
    envelopes, status codes, or public behavior.
-7. **Verification is part of implementation.** A change is not complete until the
-   relevant formatter, static analysis, tests, and build have run.
+7. **Verification is part of implementation.** A change is not complete until
+   proof matched to the changed behavior has run.
 8. **Never conceal failure.** Do not ignore errors, misrepresent test results, or
    add special cases merely to make a test pass.
