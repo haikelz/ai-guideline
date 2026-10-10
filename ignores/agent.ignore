@@ -5,8 +5,19 @@
 .env
 .env.*
 !.env.example
+!.env.*.example
+!.env.local.example
 !.env.sample
 !.env.template
+.envrc
+.dev.vars
+.npmrc
+.netrc
+*.tfvars
+kubeconfig
+*.kubeconfig
+.docker/config.json
+.aws/
 *.pem
 *.key
 *.p12
@@ -24,11 +35,13 @@ secrets.json
 service-account*.json
 
 # Dependencies, generated output, and tool caches
+# build/, out/, target/, tmp/, and temp/ are root-anchored because the same
+# names can be real source directories deeper in a project.
 node_modules/
 vendor/
 dist/
-build/
-out/
+/build/
+/out/
 .next/
 .nuxt/
 .output/
@@ -42,7 +55,7 @@ coverage/
 .mypy_cache/
 .ruff_cache/
 __pycache__/
-target/
+/target/
 
 # Local infrastructure and data state
 .terraform/
@@ -54,9 +67,8 @@ target/
 *.dump
 
 # Logs, temporary files, and generated binaries
-logs/
-tmp/
-temp/
+/tmp/
+/temp/
 *.log
 *.bak
 *.tmp

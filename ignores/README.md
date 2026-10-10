@@ -5,7 +5,21 @@ agent-specific ignore file with `--ignore-agent <agent>`. The patterns exclude
 secrets, credentials, dependencies, generated output, caches, local state,
 logs, temporary files, and compiled binaries while keeping source,
 documentation, migrations, lockfiles, public assets, and `.agents` guidelines
-available.
+available. Example environment files such as `.env.example`, `.env.*.example`,
+and `.env.local.example` stay visible.
+
+Generic output names (`build/`, `out/`, `target/`, `tmp/`, `temp/`) are
+anchored to the project root because the same names can be real source
+directories deeper in a project, for example a `src/app/logs/` route or a Go
+`build/package/` directory. Directory names that are never source
+(`node_modules/`, `dist/`, `.next/`, `coverage/`, caches) match at any depth so
+monorepo workspaces stay covered. Add `apps/<name>/build/` outside the managed
+block when a workspace emits output under a generic name. `logs/` is not
+ignored; `*.log` covers log files.
+
+Secret-bearing local configuration is excluded as well: `.envrc`, `.dev.vars`,
+`.npmrc`, `.netrc`, `*.tfvars`, kubeconfig files, `.docker/config.json`, and
+`.aws/`.
 
 The installer can create one of these project-root files:
 
