@@ -31,6 +31,7 @@ files=(
   'install.sh'
   'general.md'
   'preferences.md'
+  'harness.md'
   'ignores/agent.ignore'
 )
 while IFS= read -r guideline; do

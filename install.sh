@@ -77,9 +77,10 @@ Options:
   -h, --help         Show this help text.
 
 Installed layout:
-  .agents/general.md
+  .agents/general.md, .agents/preferences.md, .agents/harness.md
   .agents/guidelines/*.md
   AGENTS.md managed link block
+  GEMINI.md importing AGENTS.md, when .gemini/ exists or --ignore-agent gemini
   One selected coding-agent ignore file in the project root
 EOF
 }
@@ -544,7 +545,7 @@ for framework in echo fiber gorm-postgresql; do
   fi
 done
 
-selected=('general.md' 'preferences.md')
+selected=('general.md' 'preferences.md' 'harness.md')
 detected=()
 add_selected() {
   local candidate=$1
@@ -688,6 +689,7 @@ destination_for() {
   case "$1" in
     general.md) printf '%s/.agents/general.md\n' "$TARGET" ;;
     preferences.md) printf '%s/.agents/preferences.md\n' "$TARGET" ;;
+    harness.md) printf '%s/.agents/harness.md\n' "$TARGET" ;;
     guidelines/astro.md | \
       guidelines/docker.md | \
       guidelines/echo.md | \
@@ -940,7 +942,8 @@ markdown_path() {
 render_context_profiles() {
   local stacks=$1
   local prefix=$2
-  printf '%s\n' '- **Repository setup, documentation, planning, or process:** no companion guideline.'
+  printf -- '- **Repository setup, documentation, planning, CI, or process:** %s.\n' \
+    "$(markdown_path "$prefix" 'harness.md')"
   if contains_word "$stacks" 'javascript-typescript'; then
     printf -- '- **JavaScript or TypeScript language/library work:** %s and %s.\n' \
       "$(markdown_path "$prefix" 'guidelines/javascript-typescript.md')" \
@@ -1016,7 +1019,7 @@ relative_agents_dir() {
 {
   printf '%s\n' "$BEGIN_MARKER"
   printf '## AI Engineering Guidelines\n\n'
-  printf '%s\n\n' "Read \`.agents/general.md\` and \`.agents/preferences.md\` for every task. Then select the smallest matching context profile below. Do not read every installed companion by default. Repository-local contracts and instructions remain authoritative."
+  printf '%s\n\n' "Read \`.agents/general.md\` and \`.agents/preferences.md\` for every task. Then select the smallest matching context profile below. Do not read every installed companion by default. Precedence follows \`.agents/general.md\` §2: repository-local instructions win, then the \`haikel-*\` owner profile, then the other guidelines."
   render_context_profiles "$all_stacks" '.agents'
   workspace_count=0
   for index in "${!workspace_paths[@]}"; do
@@ -1102,6 +1105,17 @@ workspace_is_desired() {
 
 write_managed_block "$agents_file" "$agents_block_tmp" "$BEGIN_MARKER" "$END_MARKER"
 
+# Gemini CLI reads GEMINI.md, not AGENTS.md. Link it only for Gemini projects.
+# ponytail: root only; workspace AGENTS.md blocks still need their own GEMINI.md.
+if [[ -d "$TARGET/.gemini" || "$ignore_agent" == 'gemini' ]]; then
+  gemini_file="$TARGET/GEMINI.md"
+  if [[ ! -e "$gemini_file" ]]; then
+    printf '@./AGENTS.md\n' >"$gemini_file"
+  elif ! grep -Eqx '@(\./)?AGENTS\.md' "$gemini_file"; then
+    printf 'Note: GEMINI.md does not import AGENTS.md; add "@./AGENTS.md" so Gemini CLI loads the guidelines.\n' >&2
+  fi
+fi
+
 if ((workspace_instructions)); then
   workspace_state_tmp=$(mktemp "${TMPDIR:-/tmp}/ai-guideline-workspaces.XXXXXX")
   printf '# ai-guideline workspace instructions v1\n' >"$workspace_state_tmp"
@@ -1152,6 +1166,12 @@ if ((${#ignore_files[@]})); then
       "$IGNORE_BEGIN_MARKER" \
       "$IGNORE_END_MARKER"
   done
+fi
+
+# ponytail: warn only; the owner decides whether to commit .agents/.
+if git -C "$TARGET" rev-parse --git-dir >/dev/null 2>&1 &&
+  git -C "$TARGET" check-ignore -q .agents/general.md; then
+  printf 'Warning: .agents/ is ignored by Git; AGENTS.md will link to missing files in fresh clones, CI, and worktrees.\n' >&2
 fi
 
 printf 'Installation complete.\n'

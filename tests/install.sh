@@ -72,6 +72,8 @@ assert_not_contains "$next/.cursorignore" '# AI-GUIDELINES-IGNORE:BEGIN'
 "$INSTALLER" --ignore-agent cursor "$next" >/dev/null
 assert_file "$next/.agents/general.md"
 assert_file "$next/.agents/preferences.md"
+assert_file "$next/.agents/harness.md"
+assert_contains "$next/AGENTS.md" "\`.agents/harness.md\`"
 assert_file "$next/.agents/guidelines/javascript-typescript.md"
 assert_file "$next/.agents/guidelines/haikel-javascript-typescript.md"
 assert_file "$next/.agents/guidelines/nextjs.md"
@@ -456,5 +458,23 @@ AI_GUIDELINE_BASE_URL="file://$ROOT" \
 assert_file "$reviewed/.agents/guidelines/astro.md"
 assert_file "$reviewed/.agents/guidelines/docker.md"
 assert_file "$reviewed/.geminiignore"
+assert_line "$reviewed/GEMINI.md" '@./AGENTS.md'
+
+custom_gemini="$work/custom-gemini"
+mkdir -p "$custom_gemini/.gemini"
+printf '# Team notes\n' >"$custom_gemini/GEMINI.md"
+gemini_output=$(bash "$INSTALLER" "$custom_gemini" 2>&1)
+assert_text_contains "$gemini_output" 'GEMINI.md does not import AGENTS.md'
+assert_count "$custom_gemini/GEMINI.md" '@./AGENTS.md' 0
+assert_no_file "$next/GEMINI.md"
+
+ignored_agents="$work/ignored-agents"
+mkdir -p "$ignored_agents"
+git -C "$ignored_agents" init -q
+printf '.agents\n' >"$ignored_agents/.gitignore"
+ignored_output=$(bash "$INSTALLER" "$ignored_agents" 2>&1)
+assert_text_contains "$ignored_output" '.agents/ is ignored by Git'
+tracked_output=$(bash "$INSTALLER" "$custom_gemini" 2>&1)
+assert_text_not_contains "$tracked_output" '.agents/ is ignored by Git'
 
 printf 'PASS: install.sh\n'

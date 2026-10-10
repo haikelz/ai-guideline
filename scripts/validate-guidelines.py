@@ -16,6 +16,7 @@ MARKDOWN_FILES = [
     ROOT / "RELEASING.md",
     ROOT / "general.md",
     ROOT / "preferences.md",
+    ROOT / "harness.md",
     ROOT / "ignores" / "README.md",
     *GUIDELINES,
 ]
