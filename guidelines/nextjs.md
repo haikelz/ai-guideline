@@ -1,8 +1,6 @@
 # Next.js App Router Coding-Agent Guideline
 
-This document is the framework-specific companion to the JavaScript and TypeScript engineering guideline. Apply both, together with repository instructions and product contracts. This document assumes the App Router; do not silently introduce Pages Router conventions.
-
-The terms **MUST**, **SHOULD**, and **AVOID** are normative. When a repository convention conflicts with a suggestion here, preserve the established convention unless it is unsafe, broken, or the task explicitly changes it.
+This guide covers Next.js App Router applications; do not introduce Pages Router conventions. Precedence follows `general.md` §2. Where `haikel-javascript-typescript.md` disagrees with this guide, the profile wins.
 
 ## 1. Scope and Version Discovery
 
@@ -13,7 +11,7 @@ Before editing, an agent **MUST** establish facts rather than rely on remembered
 3. Determine whether the application uses `src/app` or `app`, whether it is standalone or in a monorepo, and which project owns the target.
 4. Inspect neighboring routes, providers, services, schemas, components, tests, and import aliases before choosing placement.
 5. Check whether request APIs such as `params`, `searchParams`, `cookies()`, and `headers()` are asynchronous in the installed version. Use the installed API, not compatibility casts.
-6. Check official documentation for the installed major/minor version when behavior is uncertain or recently changed. In particular, newer versions may rename `middleware.ts` to `proxy.ts`; follow the installed version and existing repository.
+6. Check official documentation for the installed major/minor version when behavior is uncertain or recently changed.
 7. Trace cache tags, query keys, redirects, authorization, metadata, and public contracts before changing them.
 
 ### MUST
@@ -31,26 +29,34 @@ Before editing, an agent **MUST** establish facts rather than rely on remembered
 
 - Upgrading Next.js, React, lockfiles, or unrelated dependencies as part of a feature fix.
 - Copying examples from a different Next.js major version.
-- Using deprecated `next lint`; invoke the repository's actual linter directly when required by the installed version.
+- `next lint`, which Next.js 16 removed. Run `eslint .` with the flat `eslint.config.mjs`.
+
+### Next.js 16 facts
+
+- The request interception file is `proxy.ts` exporting `proxy()`. `middleware.ts` applies only to Next.js 15 and earlier.
+- `params`, `searchParams`, `cookies()`, and `headers()` are asynchronous. Prefer the generated `PageProps<"/route">`, `LayoutProps<"/route">`, and `RouteContext<"/api/route">` helpers over hand-written prop types, and do not shadow them with local types of the same name.
+- Turbopack is the default bundler. Build with `next build --webpack` when a webpack-only plugin, such as a PWA plugin, is installed.
+- `revalidateTag(tag, profile)` requires a `cacheLife` profile such as `"max"`. Use `updateTag(tag)` in a Server Action that needs read-your-own-writes, and `refresh()` to refresh the client router cache from a Server Action.
+- With `cacheComponents` enabled, cache server work with `"use cache"` plus `cacheLife()` and `cacheTag()` from `next/cache`. Without it, `fetch` caching options still apply.
 
 ## 2. Project and Monorepo Placement
 
-A common ownership model is:
+The ownership model is:
 
 ```text
-apps/web/
-  src/app/                 route tree and framework files
-  src/components/ui/       domain-free accessible primitives
-  src/components/common/   shared application composition
-  src/features/<feature>/  feature UI, schemas, hooks, and client queries
-  src/server/              server-only use cases, repositories, auth
-  src/services/            typed transport clients
-  src/lib/                 focused framework-neutral utilities
-packages/
-  ui/                      genuinely shared UI
-  contracts/               shared schemas or generated API contracts
-  config/                  shared tool configuration
+src/
+  app/                           route tree, framework files, route handlers
+  components/ui/                 domain-free accessible primitives
+  components/common/             shared application composition
+  components/<area>/<feature>/   feature pages, tables, forms, dialogs
+  hooks/<resource>.ts            React Query hooks per resource
+  lib/schemas/<resource>.ts      Zod schemas and inferred types
+  services/<resource>.ts         typed transport functions
+  types/                         cross-cutting types only
+  server/                        server-only use cases and auth, when needed
 ```
+
+In a monorepo, this tree lives under `apps/<app>/`, and `packages/` holds only genuinely shared UI, contracts, and tool configuration.
 
 ### MUST
 
@@ -130,26 +136,21 @@ Server Components are the default. They may fetch data, access server configurat
 
 ## 5. Parameters, Search Parameters, and Navigation
 
-For versions with asynchronous route props, use the generated or explicit promise types:
+Use the generated route prop helpers:
 
 ```tsx
-type PageProps = {
-  params: Promise<{ itemId: string }>;
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-};
-
-export default async function Page({ params, searchParams }: PageProps) {
+export default async function Page({
+  params,
+  searchParams,
+}: PageProps<"/items/[itemId]">) {
   const { itemId } = await params;
-  const rawQuery = await searchParams;
-  const query = listQuerySchema.parse(rawQuery);
+  const query = listQuerySchema.parse(await searchParams);
   const item = await getItem(itemId);
-
   if (!item) notFound();
+
   return <ItemView item={item} query={query} />;
 }
 ```
-
-Use the synchronous prop form only when that is the installed API.
 
 ### MUST
 
@@ -208,17 +209,18 @@ Use the synchronous prop form only when that is the installed API.
 ```tsx
 "use client";
 
-export default function ErrorBoundary({
-  error,
-  reset,
-}: {
-  error: Error & { digest?: string };
-  reset: () => void;
-}) {
+type ErrorPageProps = {
+  readonly error: Error & { digest?: string };
+  readonly reset: () => void;
+};
+
+export default function ErrorPage({ reset }: ErrorPageProps) {
   return (
     <section role="alert">
       <h2>Something went wrong</h2>
-      <button type="button" onClick={reset}>Try again</button>
+      <button onClick={reset} type="button">
+        Try again
+      </button>
     </section>
   );
 }
@@ -236,16 +238,16 @@ export default function ErrorBoundary({
 - Empty spinners with no context, page-wide blocking for one widget, or leaking error messages/stacks.
 - Calling `reset()` without fixing or refetching the failing dependency.
 
-## 8. Middleware, Authentication, and Authorization
+## 8. Proxy, Authentication, and Authorization
 
-Use the framework entry filename appropriate to the installed version (`middleware.ts` or its successor). This layer runs broadly and often in a constrained runtime.
+Next.js 16 uses `proxy.ts`; earlier versions use `middleware.ts`. This layer runs broadly and often in a constrained runtime.
 
 ### MUST
 
-- Keep middleware/proxy logic lightweight: routing, locale, coarse session presence checks, safe redirects, and headers.
+- Keep proxy logic lightweight: routing, locale, coarse session presence checks, safe redirects, and headers.
 - Configure a precise matcher that excludes static assets, image optimization, metadata files, and unrelated endpoints.
 - Verify session integrity with a runtime-compatible mechanism. Never trust an unsigned role or user identifier cookie.
-- Enforce authorization again at every privileged data access, Route Handler, and Server Action. UI hiding and middleware redirects are not authorization.
+- Enforce authorization again at every privileged data access, Route Handler, and Server Action. UI hiding and proxy redirects are not authorization.
 - Derive actor identity from verified server auth context, not submitted fields.
 - Use `httpOnly`, `secure` in production, appropriate `sameSite`, scoped `path`, expiry, and CSRF protection for cookie-based mutation flows.
 - Return 401 for unauthenticated API access and 403 for authenticated but unauthorized access; use redirects primarily for document navigation.
@@ -258,10 +260,14 @@ Use the framework entry filename appropriate to the installed version (`middlewa
 
 ### AVOID
 
-- Database calls, large dependencies, or full permission loading on every middleware match.
+- Database calls, large dependencies, or full permission loading on every proxy match.
 - Capturing cookies at module initialization.
 - Storing sensitive bearer tokens in `localStorage`.
-- Treating middleware, disabled buttons, or hidden links as sufficient access control.
+- Treating the proxy, disabled buttons, or hidden links as sufficient access control.
+
+### Same-origin backend proxy
+
+Client services MAY call same-origin Route Handlers such as `/api/backend/...` that forward to the backend API and attach the session from an `httpOnly` cookie. This keeps tokens out of browser JavaScript. Server Components still call server functions directly instead of fetching these handlers.
 
 ## 9. Route Handlers and Server Actions
 
@@ -284,19 +290,23 @@ Choose the boundary according to consumers:
 ```ts
 "use server";
 
-import { revalidateTag } from "next/cache";
-import { itemInputSchema } from "@/features/items/schema";
+import { itemInputSchema } from "@/lib/schemas/item";
 import { requireUser } from "@/server/auth";
 import { createItem } from "@/server/items";
+import { updateTag } from "next/cache";
+import { z } from "zod";
 
 export async function createItemAction(input: unknown) {
   const user = await requireUser();
   const parsed = itemInputSchema.safeParse(input);
-  if (!parsed.success) return { ok: false as const, issues: parsed.error.flatten() };
+  if (!parsed.success) {
+    return { issues: z.flattenError(parsed.error), ok: false as const };
+  }
 
   const item = await createItem(user, parsed.data);
-  revalidateTag("items");
-  return { ok: true as const, id: item.id };
+  updateTag("items");
+
+  return { id: item.id, ok: true as const };
 }
 ```
 
@@ -319,7 +329,7 @@ export async function createItemAction(input: unknown) {
 
 - Put transport mechanics and server data access outside components. Return validated contracts or domain/view models, not raw response wrappers.
 - Use the native server `fetch` integration when its memoization/cache semantics are useful; otherwise make cache behavior explicit.
-- Specify freshness intentionally with the installed APIs: uncached/request-time data, timed revalidation, or tag/path invalidation. Defaults have changed between Next.js versions.
+- Specify freshness intentionally with the installed APIs: uncached/request-time data, timed revalidation, `"use cache"` with `cacheLife`, or tag/path invalidation. Defaults have changed between Next.js versions.
 - Include identity/tenant/permission scope in any server cache key. Never share personalized data through a public cache.
 - Apply timeouts/abort signals, normalize known errors, and avoid unbounded retries.
 - Read request-scoped cookies and headers inside request execution, not during module evaluation.
@@ -334,6 +344,7 @@ export async function getCatalog(): Promise<CatalogItem[]> {
   });
 
   if (!response.ok) throw new UpstreamError(response.status);
+
   return catalogSchema.parse(await response.json());
 }
 ```
@@ -354,24 +365,14 @@ export async function getCatalog(): Promise<CatalogItem[]> {
 
 Use React Query for client-owned asynchronous server state: polling, optimistic mutations, user-triggered refetching, and long-lived interactive screens. Do not duplicate data already owned effectively by a Server Component without a UX reason.
 
+Hook modules, key functions, invalidation ownership, and toast placement follow `haikel-javascript-typescript.md` §5. Hook modules start with `"use client"`.
+
 ### MUST
 
-- Create one stable `QueryClient` per browser session/provider lifecycle, not during each render.
-- Use semantic key factories and include every input that changes the result.
-- Keep query functions in feature/service modules and return normalized data.
+- Create one stable `QueryClient` per provider lifetime with `useState(() => new QueryClient(...))`.
+- Include every input that changes the result in the query key.
 - Set `staleTime`, garbage collection, retry, and refetch behavior deliberately.
-- Invalidate or update the narrowest relevant keys after mutation.
 - Cancel conflicting requests and provide rollback context for optimistic updates.
-
-```ts
-export const itemKeys = {
-  all: ["items"] as const,
-  lists: () => [...itemKeys.all, "list"] as const,
-  list: (filters: ItemFilters) => [...itemKeys.lists(), filters] as const,
-  details: () => [...itemKeys.all, "detail"] as const,
-  detail: (id: string) => [...itemKeys.details(), id] as const,
-};
-```
 
 ### SHOULD
 
@@ -426,18 +427,20 @@ Use one owner for each state:
 - Validate file count, size, type, and content server-side; browser MIME/type checks are insufficient.
 
 ```tsx
-const schema = z.object({
+const contactFormSchema = z.object({
+  email: z.email("Enter a valid email address"),
   name: z.string().trim().min(1, "Enter a name"),
-  email: z.string().trim().email("Enter a valid email address"),
 });
 
-type FormInput = z.input<typeof schema>;
+type ContactFormValues = z.input<typeof contactFormSchema>;
 
-const form = useForm<FormInput>({
-  resolver: zodResolver(schema),
-  defaultValues: { name: "", email: "" },
+const form = useForm<ContactFormValues>({
+  defaultValues: { email: "", name: "" },
+  resolver: zodResolver(contactFormSchema),
 });
 ```
+
+Field state, `setError("root")`, and `aria-live` error rendering follow `haikel-javascript-typescript.md` §4.
 
 ### SHOULD
 
@@ -460,11 +463,7 @@ const form = useForm<FormInput>({
 - **Feature components** own domain language, workflows, and feature-specific queries/forms.
 - **Route components** connect URL/server data to feature composition.
 
-### MUST
-
-- Preserve this dependency direction and avoid placing business workflows in primitive files.
-- Use named exports for reusable components; retain required default exports for framework route files.
-- Keep one clear responsibility per component; split by ownership/data flow, not arbitrary line count.
+Preserve this dependency direction and keep business workflows out of primitive files. Naming and export rules follow `haikel-javascript-typescript.md` §2.
 
 ### Dialogs
 
@@ -483,53 +482,11 @@ const form = useForm<FormInput>({
 - Use stable row identifiers; never use array indexes for mutable data.
 - Avoid loading the full dataset for client pagination, ambiguous icon-only actions, and hiding essential columns without another way to access them.
 
-## 15. Styling, Motion, and Responsiveness
+## 15. Styling and Accessibility
 
-### MUST
+Follow the application's component library, tokens, and class-merging conventions, and `preferences.md` for interface and accessibility quality. Respect `prefers-reduced-motion`, keep server and client markup identical regardless of viewport, and use semantic HTML before ARIA.
 
-- Follow the existing styling system, tokens, class-merging utility, and component variants.
-- Build mobile-first and test narrow, medium, and wide layouts with realistic long content and zoom.
-- Reserve space for asynchronous media/content and prevent unintended horizontal overflow.
-- Respect `prefers-reduced-motion`; motion must not be required to understand or operate the UI.
-- Animate compositor-friendly `transform` and `opacity` where practical. Keep interaction feedback short and interruptible.
-- Use logical properties where directionality may change and account for safe areas in edge-to-edge mobile UI.
-
-### SHOULD
-
-- Prefer CSS/container queries over JavaScript viewport checks for presentation.
-- Use design tokens for color, spacing, typography, radius, and elevation.
-- Dynamically import genuinely heavy visualization/editor/map modules and provide a stable fallback.
-
-### AVOID
-
-- Arbitrary one-off colors/spacing, excessive `z-index`, layout animation of large regions, and `transition: all`.
-- Rendering materially different server/client markup based on `window.innerWidth`.
-- Hover-only disclosure, fixed heights around variable text, and truncation that hides essential information.
-
-## 16. Accessibility
-
-### MUST
-
-- Use semantic HTML and native controls before ARIA. Every interactive element must be keyboard operable and visibly focusable.
-- Provide one descriptive page `<h1>`, logical heading order, meaningful link/button names, form labels, instructions, and associated errors.
-- Maintain focus through navigation, dialogs, async replacement, and errors. Use a skip link for repeated navigation when appropriate.
-- Announce asynchronous form/status changes with an appropriately scoped live region; do not announce every background refresh.
-- Meet the applicable contrast target and preserve usability at 200% zoom and text enlargement.
-- Give touch targets adequate size and spacing; do not rely on color alone.
-- Respect reduced motion and avoid unexpected autoplay.
-
-### SHOULD
-
-- Test keyboard-only operation and at least one screen-reader path for changed critical workflows.
-- Use route announcements or meaningful title updates for client navigation where framework defaults are insufficient.
-- Keep DOM reading order aligned with visual order.
-
-### AVOID
-
-- Positive `tabIndex`, clickable `<div>` elements, redundant ARIA, focus removal without replacement, and `aria-hidden` on focusable descendants.
-- Placeholder-only labels and generic names such as “Click here” or repeated unlabeled “Edit” buttons.
-
-## 17. Testing
+## 16. Testing
 
 ### MUST
 
@@ -543,7 +500,7 @@ const form = useForm<FormInput>({
 
 ### SHOULD
 
-- Use Vitest/Jest and React Testing Library for units/components, Mock Service Worker or equivalent for HTTP boundaries, and Playwright for critical navigation/auth flows.
+- Use the repository runner: `bun test` with colocated `*.test.ts(x)`, flat `test()` calls, and `renderToStaticMarkup` in Bun applications; Vitest or Jest with React Testing Library in those projects. Use Mock Service Worker or an equivalent for HTTP boundaries and Playwright for critical navigation/auth flows.
 - Include accessibility assertions and keyboard interaction in component/end-to-end tests.
 - Use deterministic factories and fixed time zones for date behavior.
 
@@ -552,111 +509,47 @@ const form = useForm<FormInput>({
 - Snapshot-only coverage, “renders without crashing” as the only assertion, implementation selectors, and mocking the unit under test.
 - Tests that depend on execution order, real clocks, production credentials, or generated build output.
 
-## 18. Nx, Packages, Build, Docker, PWA, and Observability
+## 17. Nx, Packages, PWA, and Observability
 
-Apply this section only when the capability exists or the task introduces it.
+Apply this section only when the capability exists or the task introduces it. Production builds and containers follow `docker.md`.
 
-### Nx and workspace packages
+### Workspaces
 
-#### MUST
-
-- Run targets through the workspace's declared commands and project names; inspect the project graph before changing task dependencies.
-- Declare cacheable target inputs/outputs accurately. Do not cache long-running development servers or tasks with undeclared external side effects.
-- Keep package peer/runtime dependencies and exports correct; do not rely on accidental root hoisting.
-
-#### SHOULD
-
-- Use affected targets in CI for large monorepos and focused project targets during development.
-- Keep shared TypeScript/lint configuration versioned in dedicated packages when already established.
-
-#### AVOID
-
-- Running workspace-wide formatting to change one app, circular package dependencies, and importing application source through relative paths from packages.
-
-### Production build and Docker
-
-#### MUST
-
-- Treat `next build` as required verification for framework/configuration changes.
-- For `output: "standalone"`, copy the standalone server, static assets, and public assets using paths that match monorepo output.
-- Use a lockfile-frozen install, multi-stage build, non-root runtime user, production environment, and a minimal runtime image.
-- Provide only required build arguments. Secrets MUST use secret mounts/runtime injection and MUST NOT be copied into layers or exposed through `NEXT_PUBLIC_*`.
-- Add a narrow `.dockerignore`; never send local environment files, VCS data, caches, or development artifacts as build context.
-
-#### SHOULD
-
-- Pin a supported Node major consistently across local, CI, and container environments.
-- Add a health endpoint/check that tests application readiness without exposing internals.
-- Set telemetry policy explicitly and handle graceful shutdown where custom runtime work requires it.
-
-#### AVOID
-
-- Global package-manager installs without version pinning, running as root, copying the entire source into the final image, and assuming root-level `.next` paths in a monorepo.
+- Run targets through the workspace's declared commands and project names, and declare cacheable target inputs/outputs accurately.
+- Keep package peer/runtime dependencies and exports correct; do not rely on root hoisting or import application source through relative paths from packages.
 
 ### PWA and service workers
 
-#### MUST
-
-- Add PWA behavior only for a real offline/installability requirement.
-- Version caches and define update behavior. Never cache authenticated HTML, session endpoints, mutation responses, or sensitive API data with broad strategies.
-- Ensure service workers are disabled or predictable in development/tests and verify unregister/update migration behavior.
-- Keep manifest identity, icons, scope, start URL, display, and theme colors valid.
-
-#### SHOULD
-
-- Prefer network-first for changing documents/data and cache-first only for immutable revisioned assets.
-- Provide offline and update UX, and test a deployed production build because development mode is not representative.
-
-#### AVOID
-
-- Aggressive navigation caching by default, committing generated service-worker bundles unless the tool requires tracked artifacts, and assuming “online again” makes queued mutations safe.
+- Add PWA behavior only for a real offline/installability requirement. Webpack-based PWA plugins require `next build --webpack`.
+- Version caches and define update behavior. Never cache authenticated HTML, session endpoints, mutation responses, or sensitive API data.
+- Prefer network-first for changing documents/data and cache-first only for immutable revisioned assets. Disable service workers in development/tests and verify against a production build.
+- Do not commit generated service-worker bundles unless the tool requires tracked artifacts.
 
 ### Observability
 
-#### MUST
+- Initialize instrumentation through the supported server/client entry points, once.
+- Capture unexpected errors with environment, release, route, and safe correlation identifiers. Do not report expected validation failures as incidents.
+- Redact authorization headers, cookies, tokens, passwords, and form contents from logs, traces, and replays. Keep source maps private unless exposure is intended.
 
-- Initialize instrumentation through supported server/client/edge entry points for the installed version.
-- Capture unexpected errors with environment, release, route/operation, and safe correlation identifiers.
-- Redact authorization headers, cookies, tokens, passwords, form contents, and unnecessary personal data from logs, traces, replay, and breadcrumbs.
-- Upload source maps securely during CI/build and prevent public source-map exposure when not intended.
-- Avoid duplicate initialization and duplicate error reporting across boundaries.
-
-#### SHOULD
-
-- Use structured logs and distributed trace context across upstream calls.
-- Sample expensive traces/replays deliberately by environment and monitor web vitals relevant to user experience.
-
-#### AVOID
-
-- Importing server instrumentation into client code, embedding observability auth tokens in runtime bundles, and reporting expected validation failures as incidents.
-
-## 19. Verification Workflow
+## 18. Verification Workflow
 
 The agent **MUST** use repository scripts and the package manager selected by the lockfile. Adapt this sequence to the actual workspace:
 
 ```bash
-# Focused tests first
-pnpm --filter web test -- --run path/to/changed.test.tsx
-
-# Non-mutating quality checks
-pnpm --filter web exec biome check src/path/to/changed.tsx
-pnpm --filter web exec tsc --noEmit
-pnpm --filter web test -- --run
-
-# Framework integration and production behavior
-pnpm --filter web build
-# In Nx workspaces, use the declared target when appropriate:
-pnpm exec nx run web:build
+<pm> run format:check
+<pm> run lint
+<pm> exec tsc --noEmit
+<pm> test <changed-test-path>
+<pm> run build
 ```
+
+Command selection follows `haikel-javascript-typescript.md` §8.
 
 ### MUST
 
-1. Format only changed files using configured tooling.
-2. Run non-mutating lint/check, type-checking, focused tests, then broader tests/build based on blast radius.
-3. Inspect build output for dynamic-rendering bailouts, route conflicts, unsupported configuration, bundle regressions, and PWA/observability warnings.
-4. Exercise changed routes at realistic viewport sizes and test keyboard behavior when UI changed.
-5. Inspect the final diff for accidental client boundaries, secrets, debug output, generated files, unrelated formatting, and contract changes.
-6. Report exact commands and results. Distinguish pre-existing failures from introduced failures with evidence.
+1. Inspect build output for dynamic-rendering bailouts, route conflicts, unsupported configuration, bundle regressions, and PWA/observability warnings.
+2. Exercise changed routes at realistic viewport sizes and test keyboard behavior when UI changed.
+3. Inspect the final diff for accidental client boundaries, secrets, debug output, generated files, unrelated formatting, and contract changes.
 
 ### SHOULD
 
@@ -669,26 +562,3 @@ pnpm exec nx run web:build
 - Using auto-fix as final lint verification.
 - Claiming success from development mode alone.
 - Deleting caches or lockfiles to hide an unexplained failure.
-
-## 20. Prohibited Anti-Patterns
-
-The agent **MUST NOT**:
-
-- Introduce Pages Router APIs (`getServerSideProps`, `getStaticProps`, `_app`, or `_document`) into App Router routes.
-- Add `"use client"` to a page/layout or broad subtree merely for one hook or event.
-- Leak secrets or privileged server modules into the client bundle, including through barrels or `NEXT_PUBLIC_*`.
-- Trust client claims for identity, ownership, roles, prices, permissions, or mutation authorization.
-- Assume middleware, route visibility, or UI controls provide authorization.
-- Read cookies/headers once at module initialization or globally cache personalized data.
-- Fetch this application's own Route Handler from a Server Component when a direct server function is available.
-- Use unvalidated `params`, `searchParams`, form data, JSON, cookies, headers, environment variables, or upstream responses.
-- Depend on undocumented caching defaults, indiscriminately call `revalidatePath("/")`, or invalidate all React Query keys after every mutation.
-- Recreate `QueryClient` or global providers during render.
-- Mirror server, URL, query, form, and local state through effects.
-- Use array indexes as mutable row keys, render per-row dialog trees unnecessarily, or ship client-side pagination for unbounded datasets.
-- Suppress hydration errors, type errors, lint rules, image optimization, or accessibility warnings instead of fixing the cause.
-- Use broad remote image patterns, open redirects, unsafe HTML without sanitization, or raw user input in URLs/headers.
-- Cache authenticated pages or sensitive API responses in a service worker.
-- Log or report credentials, cookies, tokens, raw form data, or unnecessary personal information.
-- Commit `.next`, Nx caches, test artifacts, generated service workers, source maps, or standalone output unless repository policy explicitly tracks them.
-- Add an abstraction, provider, store, dependency, route handler, or workspace package without a demonstrated ownership or reuse need.

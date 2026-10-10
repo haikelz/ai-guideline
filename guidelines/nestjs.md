@@ -1,6 +1,6 @@
 # NestJS Coding-Agent Guideline
 
-This document is the NestJS-specific companion to the JavaScript and TypeScript engineering guideline. The language guideline remains authoritative for TypeScript safety, naming, formatting, dependency hygiene, general security, and agent workflow. This document adds Nest application architecture and operations without repeating that baseline.
+This guide covers NestJS application architecture and operations. Precedence follows `general.md` §2. Where `haikel-javascript-typescript.md` disagrees with this guide, the profile wins.
 
 The terms **MUST**, **SHOULD**, and **AVOID** are normative.
 
@@ -100,15 +100,14 @@ src/
   infrastructure/
     database/
     logging/
-  features/
-    accounts/
-      accounts.module.ts
-      accounts.controller.ts
-      accounts.service.ts
-      dto/
-      policies/
-      repositories/
-      accounts.service.spec.ts
+  accounts/
+    accounts.module.ts
+    accounts.controller.ts
+    accounts.service.ts
+    dto/
+    policies/
+    repositories/
+    accounts.service.spec.ts
 ```
 
 - Keep transport DTOs, policies, tests, and persistence adapters near the feature they serve.
@@ -120,7 +119,7 @@ src/
 
 Controllers are transport adapters.
 
-- Controllers MUST handle decorators, validated input, authenticated context, status codes, headers, and mapping to response DTOs.
+- Controllers MUST handle decorators, validated input, authenticated context, status codes, headers, and mapping to response DTOs. Wrap successful results in the established envelope, `return { data }` by default.
 - Controllers MUST delegate business decisions, persistence, hashing, and provider calls.
 - Use typed `@Body()`, `@Param()`, `@Query()`, `@Headers()`, and authenticated-principal decorators. AVOID `any`, raw `@Request()`, and raw adapter response objects.
 - Use standard Nest return values. `@Res()`/`@Response()` without passthrough takes over response handling and bypasses normal interceptors/serialization; use it only for streaming, redirects, or adapter-specific requirements.
@@ -214,7 +213,7 @@ This constrained lookup avoids leaking whether another user's resource exists. U
 
 ## 9. Prisma and Persistence Integration
 
-This section governs Nest integration; schema design and general database rules remain in the language guideline.
+This section governs Nest integration with Prisma. Migration rollout rules follow `general.md`.
 
 - Provide one process-level `PrismaClient` through an infrastructure/database module. Feature modules MUST inject that provider instead of creating clients.
 - Connect/disconnect through lifecycle hooks appropriate to the installed Prisma version and runtime. Serverless runtimes MUST reuse the client across warm invocations.
@@ -226,17 +225,20 @@ This section governs Nest integration; schema design and general database rules 
 
 ```ts
 await prisma.$transaction(async (tx) => {
-  await tx.account.update({ where: { id }, data: { balance: { decrement: sum } } });
-  await tx.ledgerEntry.create({ data: { accountId: id, amount: sum } });
+  await tx.account.update({
+    data: { balance: { decrement: amount } },
+    where: { id: accountId },
+  });
+  await tx.ledgerEntry.create({
+    data: { accountId, amount },
+  });
 });
 ```
 
 - Keep interactive transactions short. Do not send email, upload files, call HTTP providers, or wait on queues inside them. Use an outbox or post-commit workflow for reliable side effects.
 - Concurrency-sensitive changes MUST use constraints, atomic operations, isolation/locking where supported, or optimistic concurrency. A read-then-write check alone is not safe.
 - Pagination MUST use deterministic ordering and a stable tie-breaker. Prefer cursor pagination for large/changing datasets.
-- Migration files already applied to any shared environment MUST NOT be edited. Create a new descriptively named migration.
-- Development may use migration creation; CI/staging/production MUST use non-interactive migration deployment. `db push` MUST NOT replace migration deployment in shared environments.
-- Destructive migrations MUST use an expand/backfill/contract plan and account for old and new application versions during rollout.
+- Use `prisma migrate deploy` outside development; `db push` MUST NOT replace migration deployment in shared environments. Never edit an applied migration.
 - Prisma generation MUST occur deterministically during install/build or CI as established by the repository. Do not commit generated clients unless repository policy requires it.
 - Seeders MUST be explicit, idempotent where practical, environment-safe, and unable to load production secrets or destructive sample data accidentally.
 
@@ -252,16 +254,24 @@ await prisma.$transaction(async (tx) => {
 - Configuration MUST distinguish build-time and runtime concerns. Deployments MUST document which values are required before boot.
 
 ```ts
-export const authConfig = registerAs("auth", () => ({
-  issuer: process.env.JWT_ISSUER!,
-  audience: process.env.JWT_AUDIENCE!,
-  secret: process.env.JWT_SECRET!,
-}));
+const authEnvSchema = z.object({
+  JWT_AUDIENCE: z.string().min(1),
+  JWT_ISSUER: z.string().min(1),
+  JWT_SECRET: z.string().min(32),
+});
+
+export const authConfig = registerAs("auth", () => {
+  const env = authEnvSchema.parse(process.env);
+
+  return {
+    audience: env.JWT_AUDIENCE,
+    issuer: env.JWT_ISSUER,
+    secret: env.JWT_SECRET,
+  };
+});
 
 type AuthConfig = ConfigType<typeof authConfig>;
 ```
-
-The non-null assertions above are acceptable only behind startup schema validation; otherwise they are forbidden.
 
 ## 11. Exceptions, Filters, and Response Contracts
 
@@ -271,7 +281,7 @@ The non-null assertions above are acceptable only behind startup schema validati
 
 ```json
 {
-  "statusCode": 422,
+  "statusCode": 400,
   "code": "VALIDATION_FAILED",
   "message": "The request is invalid.",
   "errors": [{ "field": "email", "code": "INVALID_EMAIL" }],
@@ -378,15 +388,14 @@ Tests MUST verify behavior, contracts, and security boundaries rather than only 
 - Transaction tests SHOULD prove rollback, not merely that `$transaction` was called.
 - Keep unit tests parallel-safe; serialize only suites sharing unavoidable infrastructure.
 
-## 15. Build, Docker, and CI
+## 15. Build and CI
+
+Container builds follow `docker.md`.
 
 - Build with the lockfile's package manager and frozen/immutable install mode.
 - The build MUST generate Prisma artifacts before TypeScript compilation when required and MUST compile every runtime entry point.
 - `start:prod` MUST target the actual emitted entry file. CI SHOULD smoke-start the built artifact rather than relying only on TypeScript compilation.
-- Container builds SHOULD use pinned supported Node.js images, multi-stage builds, `.dockerignore`, and a non-root runtime user.
-- The runtime image MUST contain only production dependencies and required artifacts: compiled output, Prisma engine/client/schema or migrations when the deployment runs them, certificates, and declared assets.
-- Do not copy source secrets, `.env` files, test fixtures with credentials, package-manager caches, or an unrestricted build context into the runtime image.
-- Handle OS signals directly and avoid unnecessary shell wrappers. Define an application health check or platform probes matching actual endpoints.
+- The runtime image MUST contain only production dependencies and required artifacts, including the Prisma client and migrations when the deployment runs them.
 - Run database migrations as a controlled release step or one-shot job, not concurrently in every application replica. Application startup MUST NOT create development migrations.
 - CI MUST use service containers or isolated managed dependencies for integration tests and must provide only scoped test credentials.
 - CI SHOULD run, in order where practical: immutable install, generated-code check, formatting check, lint without mutation, type-check/build, unit tests, integration/E2E tests, migration validation, OpenAPI validation, vulnerability/license policy checks, and container build/smoke scan.
@@ -395,82 +404,24 @@ Tests MUST verify behavior, contracts, and security boundaries rather than only 
 
 ## 16. Anti-Patterns
 
-AVOID all of the following:
+Beyond the rules above, AVOID:
 
 - Duplicated bootstrap configuration across HTTP, serverless, tests, or workers.
-- Controllers containing business rules, Prisma calls, password hashing, transactions, or provider orchestration.
-- DTO classes decorated only for Swagger and assumed to be validated.
-- `any` for request users, responses, exception filters, metrics interceptors, or provider payloads.
-- Reading `process.env` in strategies/services or passing an environment value into `ConfigService.get()` as though it were a key.
-- Registering the same database/provider service in many modules, producing multiple clients.
-- Global feature modules and catch-all shared modules.
-- Circular imports hidden with `forwardRef()` instead of corrected ownership.
-- Request-scoped providers used as a default request-context mechanism.
-- Client-controlled role, owner, status, price, audit, or security fields.
-- JWTs containing full user records, password material, or reset grants accepted as access tokens.
-- Authentication without resource-level authorization.
-- Long-lived/reusable plaintext reset codes or different reset responses for existing and absent accounts.
+- Registering the same database or provider client in many modules.
+- Global feature modules, catch-all shared modules, and `forwardRef()` used to hide circular ownership.
+- Request-scoped providers as a default request-context mechanism.
+- Reading `process.env` in strategies or services, or passing an environment value into `ConfigService.get()` as a key.
 - Mutating request DTOs to construct persisted data.
-- Catching errors only to throw generic `500` errors, losing status and cause.
-- Returning raw Prisma/provider errors or ORM records from controllers.
-- External network calls inside database transactions.
 - Raw request paths, user IDs, or error messages as metric labels.
-- In-memory throttling, job locks, OTPs, or session state treated as shared in a multi-instance deployment.
-- Cron jobs running once per replica without coordination.
-- Unbounded uploads buffered in memory and trusted by MIME/extension alone.
+- In-memory throttling, job locks, OTPs, or session state treated as shared across instances, and cron jobs that run once per replica without coordination.
 - Wildcard credentialed CORS, broad proxy trust, disabled Helmet protections without rationale, or Swagger exposed by accident.
-- Unit tests that assert only `toBeDefined()`, mock the subject under test, or call live providers.
-- Editing applied migrations, using `db push` in production, or running migration creation at application startup.
-- Shipping development dependencies, secrets, or root execution in the runtime container.
+- Validation services or DTO classes that nothing calls or validates.
 
-## 17. Completion Checklist
-
-Before declaring a NestJS change complete, the agent MUST confirm:
-
-### Discovery and design
-
-- [ ] Applicable instructions, versions, adapter, runtimes, scripts, and public contracts were identified.
-- [ ] The change belongs to the selected module/layer and does not introduce a circular or global dependency.
-- [ ] Every runtime uses the same relevant bootstrap behavior.
-
-### Contracts and security
-
-- [ ] Every new external input is runtime-validated and transformed deliberately.
-- [ ] DTO validation, Swagger schemas, response DTOs, status codes, and actual behavior agree.
-- [ ] Authentication, roles/permissions, and ownership are all enforced where required.
-- [ ] Secrets, hidden fields, tokens, PII, ORM errors, and stack traces cannot leak through responses or logs.
-- [ ] CORS, Helmet, throttling, uploads, cookies, and proxy behavior remain secure for the deployment topology.
-
-### Data and operations
-
-- [ ] Prisma uses the injected lifecycle-managed client and explicit safe selects.
-- [ ] Atomic workflows use a transaction correctly; external effects are outside it or use an outbox.
-- [ ] Migrations are additive/rollout-safe, descriptively named, and deployment-compatible.
-- [ ] Logs are structured/redacted; metrics have bounded cardinality; health semantics are correct.
-- [ ] Jobs are idempotent, bounded, observable, and coordinated across replicas.
-- [ ] Startup and graceful shutdown work in each affected runtime.
-
-### Tests and delivery
-
-- [ ] Focused unit tests cover changed policies and failure paths.
-- [ ] Integration/E2E tests cover affected wiring, validation, authorization, persistence, and contract behavior.
-- [ ] Test infrastructure is isolated and no live provider or non-test database was used.
-- [ ] Built artifacts and container entry points match deployment configuration.
-- [ ] The diff contains no unrelated formatting, generated debris, debug logging, secrets, or accidental migration edits.
-
-## 18. Verification
+## 17. Verification
 
 Use repository scripts and the lockfile package manager. Prefer non-mutating final checks; never use lint auto-fix as verification.
 
-```bash
-# Replace these with repository-defined equivalents.
-pnpm exec prettier --check "src/**/*.ts" "test/**/*.ts"
-pnpm exec eslint "{src,test,apps,libs}/**/*.ts"
-pnpm exec tsc --noEmit
-pnpm test -- --runInBand
-pnpm run test:e2e
-pnpm run build
-```
+Command selection follows `haikel-javascript-typescript.md` §8; add `test:e2e` and `prisma validate` when the repository defines them.
 
 Depending on the change, also verify:
 
@@ -478,7 +429,6 @@ Depending on the change, also verify:
 - OpenAPI generation and contract diff;
 - test-database migration from empty and upgrade from the supported prior state;
 - transaction rollback and concurrent conflict behavior;
-- production container build, non-root user, entry point, health probe, and signal handling;
 - both cold and warm behavior for a serverless entry point;
 - liveness/readiness under dependency failure;
 - scheduler/worker deduplication and retry behavior;
