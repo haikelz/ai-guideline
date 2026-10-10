@@ -1,10 +1,11 @@
 # TypeSafe AI Decision-System Guideline
 
-Use this companion when building or changing a TypeSafe System One workflow.
-Read it with the applicable language and framework guidelines. Repository-local
-contracts and policies take precedence. Jev returns typed probabilistic
-judgments, not generated prose, verified facts, or permission to perform an
-action. Code owns the workflow and its consequences.
+Precedence follows `general.md` §2. This companion covers building or changing
+a TypeSafe System One workflow.
+
+Jev returns typed probabilistic judgments, not generated prose, verified facts,
+or permission to perform an action. Code owns the workflow and its
+consequences.
 
 ## 1. Choose the Right Boundary
 
@@ -80,9 +81,17 @@ action. Code owns the workflow and its consequences.
   [SDK](https://docs.typesafe.ai/sdk.md) before coding. Prefer the installed SDK
   and its types; do not assume examples for one SDK version match another.
 - Keep `TYPESAFE_API_KEY` server-side. Never expose it in a browser bundle,
-  mobile app, logs, tests, or error responses. Put network calls behind a
-  server-owned boundary with timeouts, bounded retries, and observable failure
-  handling.
+  mobile app, logs, tests, or error responses, and never set
+  `dangerouslyAllowBrowser: true`. Put calls behind a server-owned boundary.
+- Use the SDK's built-in retry policy (`retry` in the client config or per
+  call). It already retries 408, 429, and 5xx with backoff and honors
+  `retry-after`; do not wrap it in another retry loop. Set a per-attempt
+  `timeout` and remember there is no total retry budget, so bound the caller with
+  an `AbortSignal` when latency matters.
+- Never use `logLevel: "debug"` (or `TYPESAFE_LOG_LEVEL=debug`) outside local
+  debugging: it logs request bodies, including state, without redaction.
+- Log the response `model` field with each decision. It reports the versioned
+  model that answered even when the request used an alias.
 - Define what happens when the service times out, rejects a request, or returns
   no usable result. Fail closed for sensitive actions; use a safe deterministic
   fallback or manual review rather than silently choosing an option.
@@ -94,12 +103,35 @@ action. Code owns the workflow and its consequences.
   alias; pin a supported version when reproducibility matters and evaluate
   changes before switching.
 
+### Facts as of jev-1.13 (verified 2026-10-10)
+
+- Packages: JavaScript `@typesafe-ai/sdk` (0.6.x, Node 20 or newer); Python
+  `typesafe_sdk` (`from typesafe_sdk import TypeSafeClient`).
+- JavaScript API: `new TypeSafeClient(config)` and
+  `client.systemOne({ state, questions })`, with the question helpers `choice()`,
+  `noul()`, and `score()`. Config fields: `apiKey`, `baseURL`, `defaultModel`,
+  `logLevel`, `retry`, `timeout` (10000 ms per attempt by default).
+- Environment: `TYPESAFE_API_KEY`, `TYPESAFE_BASE_URL`,
+  `TYPESAFE_DEFAULT_MODEL` (default `jev-latest`), `TYPESAFE_LOG_LEVEL`
+  (default `warn`).
+- HTTP: `POST https://api.typesafe.ai/v1/systemone` with
+  `Authorization: Bearer <API_KEY>`. The response carries `model`, `answers`
+  keyed like the questions, and `usage`.
+- Limits: Choice up to 255 options; Score 2 to 10 levels; 64k tokens per
+  request and 32k for `state` plus the longest question. Limits can change.
+- Models: `jev-1.13.0` is current; `jev-latest` and `jev-preview` are moving
+  aliases.
+- References: [JavaScript SDK](https://docs.typesafe.ai/sdk/javascript.md),
+  [API](https://docs.typesafe.ai/api.md),
+  [Models](https://docs.typesafe.ai/models.md).
+
 ## 5. Test the Decision System
 
 - Keep a representative, redacted evaluation set with clear positives,
   negatives, no-match cases, ambiguous cases, missing evidence, and changes in
-  state between judgment and action. Include different languages used by the
-  product; check live model language support before assuming equal accuracy.
+  state between judgment and action. English is the primary training language
+  and other languages are handled less accurately, so Indonesian and mixed-language
+  inputs MUST have their own labeled cases before release.
 - Test the deterministic policy with fixed answer distributions: correct
   branch, threshold boundaries, vetoes, fallback, timeout, stale state,
   idempotency, and rejected/invalid results. These tests MUST NOT require a live
