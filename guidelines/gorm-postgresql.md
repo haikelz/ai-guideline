@@ -1,6 +1,8 @@
 # GORM and PostgreSQL Coding-Agent Guideline
 
-This guide is the persistence-specific companion to the Go language guide. The Go guide remains authoritative for general Go style, context propagation, layering, error wrapping, security, and test discipline. This document defines how coding agents MUST design, change, and verify GORM-backed PostgreSQL code.
+This guide defines how coding agents design, change, and verify GORM-backed PostgreSQL code.
+
+Precedence follows `general.md` §2. Where `haikel-go.md` disagrees with this guide, `haikel-go.md` wins.
 
 ## 1. Repository Context and Boundaries
 
@@ -12,45 +14,51 @@ Before editing persistence code, the agent MUST:
 4. Search all callers before changing a repository signature, model field, table name, association, default scope, or migration.
 5. Classify schema, locking, idempotency, and monetary changes as high-risk and provide focused database proof.
 
-Repositories MUST own persistence mechanics. Use cases MUST own business policy and transaction orchestration when a unit of work crosses repositories. Handlers, jobs, and provider adapters MUST NOT issue ad hoc GORM queries when a repository boundary exists.
+Repositories MUST own persistence mechanics, including the `Transaction` callback for an atomic unit. Use cases own business policy. Handlers, jobs, and provider adapters MUST NOT issue ad hoc GORM queries when a repository boundary exists.
 
 Keep transport DTOs, domain commands, query filters, and database models distinct when their contracts differ. A request body MUST NOT be mass-assigned into a model.
 
 ## 2. Database Handle and Context
 
-- Every operation that performs I/O MUST accept `context.Context` and use `db.WithContext(ctx)`.
-- Constructors SHOULD receive `*gorm.DB`; dependencies MUST NOT be hidden in package globals.
+- Every operation that performs I/O MUST accept `context.Context` and query through `r.Conn.WithContext(ctx)`.
+- Repository constructors receive `*gorm.DB` and store it in an exported `Conn` field; never hide the handle in a package global.
 - Code MUST use the repository's supported GORM version. Do not copy APIs or error constants from another major version without checking compatibility.
-- A scoped `*gorm.DB` is immutable in intent: retain and pass the returned value from `WithContext`, `Where`, `Scopes`, or `Session`.
+- A scoped `*gorm.DB` is immutable in intent: retain and pass the returned value from `WithContext`, `Where`, or `Session`.
 - Code MUST distinguish the root handle from a transaction handle. A transaction callback MUST never fall back to the root handle.
 
 ```go
-func (r *Repository) ByID(ctx context.Context, id uuid.UUID) (Record, error) {
-	var row Record
-	err := r.db.WithContext(ctx).Where("id = ?", id).First(&row).Error
-	if err != nil {
-		return Record{}, fmt.Errorf("find record %s: %w", id, err)
+func (r *OrderRepository) Find(ctx context.Context, id uint64) (*model.Order, error) {
+	var order model.Order
+
+	err := r.Conn.WithContext(ctx).
+		Where("id = ?", id).
+		First(&order).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, domain.ErrNotFound
 	}
-	return row, nil
+	if err != nil {
+		return nil, fmt.Errorf("find order: %w", err)
+	}
+
+	return &order, nil
 }
 ```
 
-## 3. Models, Base Types, UUIDs, and Time
+## 3. Models, Keys, and Time
 
-Models MUST describe persisted data explicitly. AVOID embedding `gorm.Model` when its unsigned integer ID, timestamp names, or deletion behavior do not match the schema.
+Models MUST describe persisted data explicitly. Reuse the repository's shared base model; do not embed `gorm.Model` when its ID type, timestamp names, or deletion behavior differ from the schema.
 
 ```go
 type Base struct {
-	ID        uuid.UUID      `gorm:"type:uuid;primaryKey"`
-	CreatedAt time.Time      `gorm:"not null"`
-	UpdatedAt time.Time      `gorm:"not null"`
-	DeletedAt gorm.DeletedAt `gorm:"index"`
+	ID        uint           `json:"id" gorm:"primaryKey;autoIncrement"`
+	CreatedAt time.Time      `json:"created_at" gorm:"not null"`
+	UpdatedAt time.Time      `json:"updated_at" gorm:"not null"`
+	DeletedAt gorm.DeletedAt `json:"-" gorm:"index"`
 }
 ```
 
-- Use one maintained UUID package consistently. New code SHOULD prefer `github.com/google/uuid` unless repository compatibility requires another type.
-- UUID columns MUST use PostgreSQL `uuid`, not `varchar(36)`. Generate IDs in one documented place: a database default such as `gen_random_uuid()` or application code, not unpredictably both.
-- Application-generated UUIDs SHOULD be assigned before `Create`; database-generated IDs MUST be returned and tested.
+- Keep the established key type. Do not interchange `uint`, `uint64`, and UUID keys, and use UUIDs for new tables only when the schema already does.
+- When a schema uses UUIDs, store them as PostgreSQL `uuid`, not `varchar(36)`, use one UUID package, and generate IDs in one documented place.
 - Do not use `BeforeCreate` merely to hide inconsistent ID creation. Hooks MUST be deterministic, local, error-checked, and free of external calls.
 - Store instants as `timestamptz` and use UTC at persistence boundaries. Use `timestamp` only for intentionally timezone-free civil values.
 - Use `time.Time` for required timestamps and pointers or a nullable type for nullable timestamps. Zero time MUST NOT silently mean NULL.
@@ -62,14 +70,14 @@ type Base struct {
 
 Choose types by semantics, not convenience:
 
-- IDs: `uuid`; counters: `bigint` when growth warrants it.
+- IDs: the established key type; counters: `bigint` when growth warrants it.
 - Exact amounts: integer smallest units or constrained `numeric(precision, scale)`; never `real`, `double precision`, Go `float32`, or `float64`.
 - Instants: `timestamptz`; calendar dates: `date`; time-of-day: `time` only when timezone semantics are explicit.
 - Arbitrary structured data: `jsonb`, with a typed Go representation where feasible. Validate its shape before storage.
 - Network addresses: `inet`/`cidr`; ranges: native range types when their operators are needed.
 - Enumerated states: a lookup/foreign key, a PostgreSQL enum with an evolution plan, or `text` plus a `CHECK`; do not rely only on Go validation.
 - Arrays SHOULD be used only when values are truly atomic to the row and queried with PostgreSQL array semantics. Use a child table for relational entities.
-- Nullable values MUST distinguish absent from zero. Do not use sentinel empty strings or zero UUIDs as NULL substitutes.
+- Nullable values MUST distinguish absent from zero. Do not use sentinel empty strings or zero IDs as NULL substitutes.
 
 Custom types MUST implement scanning/value conversion correctly, preserve NULL, reject malformed values, and have round-trip integration tests.
 
@@ -78,54 +86,42 @@ Custom types MUST implement scanning/value conversion correctly, preserve NULL, 
 All values MUST be bound parameters:
 
 ```go
-db.WithContext(ctx).
-	Where("tenant_id = ? AND status = ?", tenantID, status).
-	Find(&rows)
+r.Conn.WithContext(ctx).
+	Where("company_id = ? AND status = ?", companyID, status).
+	Find(&orders)
 ```
 
 User input MUST NOT be concatenated into SQL, `Where`, `Joins`, `Order`, `Select`, table names, column names, operators, JSON paths, or lock clauses. Placeholders protect values, not identifiers. Dynamic identifiers MUST come from a closed allowlist:
 
 ```go
 var sortColumns = map[string]string{
-	"created_at": "records.created_at",
-	"name":       "records.name",
+	"created_at": "orders.created_at",
+	"total":      "orders.total",
 }
 
-column, ok := sortColumns[input.Sort]
+column, ok := sortColumns[filter.Sort]
 if !ok {
-	return Page{}, ErrInvalidSort
+	return nil, 0, domain.ErrInvalidSort
 }
+
 direction := "ASC"
-if input.Descending {
+if filter.Descending {
 	direction = "DESC"
 }
-q = q.Order(column + " " + direction).Order("records.id ASC")
+
+q = q.Order(column + " " + direction).Order("orders.id ASC")
 ```
 
 - Empty slices in `IN` predicates MUST have explicit semantics; return an empty result or omit the predicate intentionally.
 - LIKE searches MUST decide whether `%` and `_` are wildcards and escape them when literal matching is intended.
 - Raw SQL MUST still use context, parameters, explicit selected columns, scan-error checks, and soft-delete/tenant predicates.
-- Prefer reusable, pure GORM scopes for optional filters. A scope MUST not execute a query or mutate unrelated state.
+- Apply optional filters with `q = q.Where(...)` under an `if` guard. Do not use `Scopes` for filters.
 
 ## 6. Filters, Counts, and Pagination
 
-Build the filtered base query once, then derive count and page queries from it. Count MUST include every authorization, tenant, soft-delete, join, and search predicate used by the list.
+Build the filtered query `q` once, count, then apply ordering and the page. Count MUST include every authorization, tenant, soft-delete, join, and search predicate used by the list. The full list example is in `haikel-go.md` §4.
 
-```go
-base := r.db.WithContext(ctx).Model(&Record{}).
-	Where("tenant_id = ?", f.TenantID)
-base = applyRecordFilters(base, f)
-
-var total int64
-if err := base.Session(&gorm.Session{}).Count(&total).Error; err != nil {
-	return Page{}, fmt.Errorf("count records: %w", err)
-}
-
-var rows []Record
-err := base.Session(&gorm.Session{}).
-	Order("created_at DESC").Order("id DESC").
-	Limit(limit).Offset(offset).Find(&rows).Error
-```
+Counting and then finding on the same `q` is the established pattern. If a chain is reused after a finisher in a way GORM's method-chain safety rules do not cover, derive each branch with `q.Session(&gorm.Session{})`.
 
 - Validate and cap page size; reject or normalize negative limits and offsets.
 - Ordering MUST be deterministic and end with a unique tie-breaker.
@@ -160,24 +156,27 @@ ON users (lower(email)) WHERE deleted_at IS NULL;
 
 ## 9. Transactions and Transaction Propagation
 
-Use GORM's closure form so panic handling, rollback, and commit errors follow one path:
+Use GORM's closure form so panic handling, rollback, and commit errors follow one path. The repository owns the callback; the result shape and helper conventions are in `haikel-go.md` §4.
 
 ```go
-func (s *Service) Execute(ctx context.Context, cmd Command) error {
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		repos := s.repos.WithDB(tx)
-		if err := repos.Records.Apply(ctx, cmd); err != nil {
-			return fmt.Errorf("apply record change: %w", err)
-		}
-		return nil
-	})
-}
+return r.Conn.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	order, err := lockOrder(tx, id)
+	if err != nil {
+		return err
+	}
+
+	if err := recordHistory(tx, order.ID, domain.StatusPaid); err != nil {
+		return fmt.Errorf("record order history: %w", err)
+	}
+
+	return nil
+})
 ```
 
 - The closure MUST return every failure. Returning `nil` commits.
-- Every read and write in the atomic unit MUST use `tx`, including audit rows, outbox rows, uniqueness checks, and repository helpers.
-- Prefer an explicit `WithDB(tx)` repository clone or transaction-aware unit of work. Do not pass an optional transaction that silently defaults to the root handle.
-- Transaction ownership belongs at the highest layer that knows the complete atomic unit. Nested transactions/savepoints MUST be intentional and tested.
+- Every read and write in the atomic unit MUST use `tx`, including audit rows, outbox rows, uniqueness checks, and helpers.
+- Helpers that run inside a transaction take `tx *gorm.DB` as the first parameter and no `ctx`. Never let a helper fall back to the root handle or open its own transaction.
+- Nested transactions and savepoints MUST be intentional and tested.
 - External network calls SHOULD occur before or after the transaction. If an external side effect must follow commit, persist an outbox record atomically and deliver it asynchronously.
 - Keep transactions short; do not wait for user input, sleep, perform unbounded computation, or preload irrelevant rows while holding locks.
 - Configure isolation only when the invariant requires it. Retry serialization failures and deadlocks at the whole-transaction boundary with a bounded policy.
@@ -188,16 +187,23 @@ For a read-modify-write invariant, use either a row lock or a single conditional
 
 ```go
 err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
-	Where("id = ?", id).First(&row).Error
+	Where("id = ?", id).
+	First(&wallet).Error
 ```
 
 ```go
-res := tx.Model(&Account{}).
+res := tx.Model(&model.Wallet{}).
 	Where("id = ? AND balance >= ?", id, debit).
 	UpdateColumn("balance", gorm.Expr("balance - ?", debit))
-if res.Error != nil { /* wrap */ }
-if res.RowsAffected != 1 { return ErrInsufficientFunds }
+if res.Error != nil {
+	return fmt.Errorf("debit wallet: %w", res.Error)
+}
+if res.RowsAffected != 1 {
+	return domain.ErrInsufficientFunds
+}
 ```
+
+GORM v2 locks rows only through `clause.Locking`. The v1 form `tx.Set("gorm:query_option", "FOR UPDATE")` does nothing in v2.
 
 - Locks MUST be acquired in a consistent order to reduce deadlocks.
 - `SKIP LOCKED` SHOULD be limited to work queues where temporarily skipping work is valid. `NOWAIT` SHOULD map lock contention to an intentional retry/conflict result.
@@ -235,17 +241,15 @@ err := tx.Clauses(clause.OnConflict{
 - Negative balances, account status, and permitted transitions MUST be enforced atomically, not by an unlocked pre-check.
 - Use checked arithmetic in Go; reject values outside the database column's precision/range.
 
-## 13. Constraints, Indexes, and Query Plans
+## 13. Constraints and Indexes
 
 - Enforce `NOT NULL`, foreign keys, uniqueness, valid ranges, and state relationships in PostgreSQL whenever expressible. Application validation improves errors but does not replace constraints.
 - Constraint and index names SHOULD be stable and explicit so migrations and error classification can reference them.
 - Indexes MUST serve observed filters, joins, uniqueness, or ordering. Column order MUST reflect equality predicates first, then range/order needs; verify rather than guessing.
 - Consider partial and expression indexes for stable predicates such as live rows or normalized identifiers.
 - AVOID redundant indexes: a unique index already supports lookup, and every index adds write and vacuum cost.
-- Use `EXPLAIN (ANALYZE, BUFFERS)` on representative, safely anonymized data for important or regressed queries. Inspect estimates, actual rows, loops, sorts, spills, and buffer reads.
-- Do not force an index merely because a small test table uses a sequential scan.
-- Production index creation SHOULD use `CONCURRENTLY` when blocking writes is unacceptable; remember it cannot run inside a transaction and needs explicit failure cleanup.
-- Statistics and data distribution matter. Query-plan proof SHOULD resemble production scale without using sensitive dumps.
+- Prove important or regressed queries with `EXPLAIN (ANALYZE, BUFFERS)` on representative, anonymized data, not tiny fixtures.
+- Create production indexes `CONCURRENTLY` when blocking writes is unacceptable; it cannot run inside a transaction.
 
 ## 14. Error Classification
 
@@ -258,28 +262,23 @@ Repositories MUST preserve causes with `%w` and classify only conditions callers
 - Serialization failure (`40001`) and deadlock (`40P01`) → retry the complete transaction with bounded backoff.
 - Context cancellation/deadline → preserve `context.Canceled`/`context.DeadlineExceeded`.
 
-Use `errors.Is` and `errors.As` with the actual driver error type supported by the repository. MUST NOT compare error strings, expose SQL details to clients, or map every database error to “not found.” Unknown errors remain internal failures and SHOULD be logged with operation and stable identifiers, never bound values containing secrets or personal data.
+Use `errors.Is` and `errors.As` with the driver error type. With pgx, that is `*pgconn.PgError` from `github.com/jackc/pgx/v5/pgconn`:
+
+```go
+var pgErr *pgconn.PgError
+if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "orders_number_key" {
+	return nil, domain.ErrDuplicateNumber
+}
+```
+
+Never compare error strings, expose SQL details to clients, or map every database error to “not found.” Unknown errors remain internal failures and SHOULD be logged with operation and stable identifiers, never bound values containing secrets or personal data.
 
 ## 15. Connection Pool and Lifecycle
 
 GORM wraps `database/sql`; configure and close the underlying pool:
 
-```go
-sqlDB, err := db.DB()
-if err != nil { return fmt.Errorf("get sql pool: %w", err) }
-sqlDB.SetMaxOpenConns(maxOpen)
-sqlDB.SetMaxIdleConns(maxIdle)
-sqlDB.SetConnMaxLifetime(maxLifetime)
-sqlDB.SetConnMaxIdleTime(maxIdleTime)
-if err := sqlDB.PingContext(ctx); err != nil { return fmt.Errorf("ping database: %w", err) }
-```
-
-- Pool values MUST be configuration-driven and budgeted across all replicas, jobs, and administrative processes below the database connection limit.
-- `MaxIdleConns` MUST NOT exceed `MaxOpenConns`. Connection lifetimes SHOULD avoid synchronized churn and be shorter than relevant infrastructure limits.
-- Startup MUST validate configuration and connectivity with a bounded context. Readiness SHOULD reflect ability to serve, without opening a new uncontrolled pool.
-- Create one long-lived pool per database role/configuration, not per request. Close it once during orderly process shutdown.
-- Monitor open/in-use/idle connections, waits, wait duration, query latency, transaction duration, and database saturation.
-- Prepared-statement caching MUST be enabled only after considering connection count, proxy mode, server resources, and statement churn.
+- Configure the underlying `database/sql` pool from typed configuration (`SetMaxOpenConns`, `SetMaxIdleConns`, `SetConnMaxLifetime`, `SetConnMaxIdleTime`), budgeted across every replica and job below the database connection limit. `MaxIdleConns` MUST NOT exceed `MaxOpenConns`.
+- Ping with a bounded context at startup. Create one long-lived pool per database role, never per request, and close it once at shutdown.
 
 ## 16. Migrations and Production Schema Safety
 
@@ -309,24 +308,9 @@ ORM mocks cannot prove SQL syntax, constraints, locking, isolation, scan behavio
 - Concurrency tests MUST use separate database connections, synchronization barriers, and bounded contexts; sleeps alone are not reliable coordination.
 - Tests SHOULD run in CI with the supported PostgreSQL major version and SHOULD include a migration-from-previous-schema test for risky releases.
 
-## 18. Verification Checklist
+## 18. Verification
 
-The agent MUST report actual commands and outcomes. From the repository root, run the applicable subset:
-
-```bash
-gofmt -s -w <changed-go-files>
-goimports -w <changed-go-files> # when configured; use repository-required flags
-go test ./path/to/changed/package/...
-go test -race -count=1 ./path/to/concurrent/package/...
-go test ./...
-go vet ./...
-go build ./<application-entrypoint>
-go build ./<migration-entrypoint>
-golangci-lint run ./...
-git diff --check
-```
-
-For persistence changes, also verify:
+Run the command list in `haikel-go.md` §8, plus a build of the migration entrypoint when migration code changes. For persistence changes, also verify:
 
 1. SQL and values are parameterized; dynamic identifiers are allowlisted.
 2. Context, tenant/ownership predicates, soft deletion, count parity, and deterministic ordering are preserved.
@@ -336,27 +320,3 @@ For persistence changes, also verify:
 6. Focused PostgreSQL integration tests cover failure, rollback, duplicate, and concurrency paths.
 7. Important changed queries have representative plan evidence when scale or latency can be affected.
 8. The diff contains no secrets, dumps, debug SQL with sensitive values, generated noise, or unrelated formatting.
-
-## 19. Prohibited Anti-Patterns
-
-Coding agents MUST NOT:
-
-- Concatenate caller input into SQL or pass unchecked input to `Order`, `Select`, `Joins`, table names, or lock clauses.
-- Omit `WithContext(ctx)` or store a context in a repository.
-- Use the root database from inside a transaction, swallow closure errors, or perform slow unbounded network calls while holding locks.
-- Implement read-modify-write without row locking, an atomic predicate, or optimistic versioning.
-- Treat a nil GORM error as success when exactly one affected row is required.
-- Use floating point for money, rewrite ledger history, or commit a balance separately from its journal.
-- Use “check then insert” as idempotency without a unique constraint.
-- Use broad `Save`, unrestricted association saves, `SELECT *` across unstable joins, or unbounded preloads by default.
-- Depend on implicit database ordering or paginate without a unique tie-breaker.
-- Let list and count queries drift, including authorization and soft-delete filters.
-- Use `Unscoped()` casually or forget soft-delete predicates in raw/table queries.
-- Represent PostgreSQL UUIDs, timestamps, exact numerics, or NULL values with lossy string/zero conventions.
-- Add indexes without workload justification or trust plans from tiny fixtures as production proof.
-- Compare database error strings or expose driver/SQL details to clients.
-- Create a connection pool per request, leave pools unbounded, or omit shutdown closure.
-- Run `AutoMigrate` or any DDL in production application startup.
-- Edit applied migrations, run migrators without an advisory lock, or combine destructive contract changes with code that still needs the old schema.
-- Write one huge backfill transaction, use offset progress on a changing table, or make a backfill non-resumable.
-- Claim mocks or SQLite prove PostgreSQL constraints, locking, types, migrations, or query behavior.
