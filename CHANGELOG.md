@@ -22,6 +22,9 @@ All notable changes to this project are documented here. Releases follow
 
 ### Added
 
+- A frontend design-system guideline for ReUI on shadcn `base-nova`, Geist Sans
+  and Geist Mono, oklch tokens, flat surfaces, and Svelte ports. The installer
+  selects it when a workspace has `components.json` and routes UI work to it.
 - A TypeSafe AI and Jev decision-system guideline with scoped SDK detection,
   explicit inclusion for HTTP clients, and workspace-specific context profiles.
 - `--ignore-agent` selects one coding-agent ignore file instead of generating

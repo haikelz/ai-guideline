@@ -193,6 +193,19 @@ assert_contains "$decision_repo/apps/triage/AGENTS.md" 'guidelines/typesafe-ai.m
 assert_contains "$decision_repo/services/worker/AGENTS.md" 'guidelines/typesafe-ai.md'
 assert_not_contains "$decision_repo/apps/portal/AGENTS.md" 'guidelines/typesafe-ai.md'
 
+design_repo="$work/design-monorepo"
+mkdir -p "$design_repo/apps/dashboard" "$design_repo/apps/admin"
+printf '{"dependencies":{"next":"16.0.0"}}\n' >"$design_repo/apps/dashboard/package.json"
+printf '{"style":"base-nova","registries":{"@reui":"https://reui.io/r/{style}/{name}.json"}}\n' \
+  >"$design_repo/apps/dashboard/components.json"
+printf '{"dependencies":{"next":"16.0.0","@heroui/react":"3.0.0"}}\n' >"$design_repo/apps/admin/package.json"
+design_output=$("$INSTALLER" --explain "$design_repo")
+assert_text_contains "$design_output" 'apps/dashboard: javascript-typescript nextjs design-system docker'
+assert_text_contains "$design_output" 'apps/admin: javascript-typescript nextjs docker'
+"$INSTALLER" "$design_repo" >/dev/null
+assert_file "$design_repo/.agents/guidelines/design-system.md"
+assert_contains "$design_repo/AGENTS.md" 'UI, styling, theming, or design-system work'
+
 printf '[tool.poetry.dependencies]\ntypesafe-sdk = "^1.0"\n' >"$decision_repo/services/worker/pyproject.toml"
 decision_output=$("$INSTALLER" --explain "$decision_repo")
 assert_text_contains "$decision_output" 'services/worker: typesafe-ai'

@@ -61,6 +61,12 @@ transactions, migrations, and deployment.
   multi-stage builds, BuildKit, runtime security, Compose, health checks,
   migrations, CI delivery, and Kubernetes interoperability.
 
+### Frontend design
+
+- [`guidelines/design-system.md`](guidelines/design-system.md) — ReUI on shadcn
+  `base-nova`, Geist Sans and Geist Mono, oklch tokens, theming, flat surfaces,
+  layout, components, motion, accessibility, and Svelte ports.
+
 ### AI decision systems
 
 - [`guidelines/typesafe-ai.md`](guidelines/typesafe-ai.md) — TypeSafe System One
@@ -263,7 +269,8 @@ exclude docker
 ```
 
 Supported names are `javascript-typescript`, `astro`, `nextjs`, `nestjs`, `go`,
-`echo`, `fiber`, `gorm-postgresql`, `docker`, and `typesafe-ai`. Unknown names, malformed lines,
+`echo`, `fiber`, `gorm-postgresql`, `docker`, `typesafe-ai`, and
+`design-system`. Unknown names, malformed lines,
 duplicate include/exclude conflicts, and framework selections without their
 language dependency are rejected before files are written. An explicit Docker
 exclusion is allowed when a project does not use containers.
@@ -329,6 +336,7 @@ terminal or plugin tools.
 | Fiber module in `go.mod` | Fiber, in addition to Go |
 | GORM plus a PostgreSQL driver in the same `go.mod` | GORM and PostgreSQL, in addition to Go |
 | Dockerfile or Compose file | Docker |
+| `components.json` (shadcn or ReUI config) | Frontend design system |
 | `@typesafe-ai/sdk` in `package.json` | TypeSafe AI, in addition to JavaScript and TypeScript |
 | `typesafe-sdk` in `pyproject.toml` or `requirements.txt` | TypeSafe AI |
 

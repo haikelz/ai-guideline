@@ -350,7 +350,7 @@ remove_workspace_stack() {
 
 valid_stack() {
   case "$1" in
-    javascript-typescript | astro | nextjs | nestjs | go | echo | fiber | gorm-postgresql | docker | typesafe-ai) return 0 ;;
+    javascript-typescript | astro | nextjs | nestjs | go | echo | fiber | gorm-postgresql | docker | typesafe-ai | design-system) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -393,6 +393,10 @@ while IFS= read -r -d '' project_file; do
         add_workspace_stack "$workspace" 'nestjs' "$source"
         add_workspace_stack "$workspace" 'docker' "$source (runtime companion)"
       fi
+      ;;
+    components.json)
+      # ponytail: a shadcn/ReUI config marks a design-system frontend; HeroUI apps have none.
+      add_workspace_stack "$workspace" 'design-system' "$source"
       ;;
     project.json)
       add_workspace_stack "$workspace" 'javascript-typescript' "$source"
@@ -438,6 +442,7 @@ while IFS= read -r -d '' project_file; do
   esac
 done < <(find_project_files -type f \( \
   -name package.json -o \
+  -name components.json -o \
   -name project.json -o \
   -name tsconfig.json -o \
   -name jsconfig.json -o \
@@ -515,7 +520,7 @@ for stack in "${exclude_args[@]:-}"; do
   [[ -z "$stack" ]] || remove_workspace_stack "$stack"
 done
 
-stack_order=(javascript-typescript astro nextjs nestjs go echo fiber gorm-postgresql docker typesafe-ai)
+stack_order=(javascript-typescript astro nextjs nestjs design-system go echo fiber gorm-postgresql docker typesafe-ai)
 for index in "${!workspace_stacks[@]}"; do
   stacks=${workspace_stacks[$index]}
   ordered_stacks=''
@@ -597,6 +602,10 @@ fi
 if contains_word "$all_stacks" 'typesafe-ai'; then
   add_detected 'typesafe-ai'
   add_selected 'guidelines/typesafe-ai.md'
+fi
+if contains_word "$all_stacks" 'design-system'; then
+  add_detected 'design-system'
+  add_selected 'guidelines/design-system.md'
 fi
 
 ignore_files=()
@@ -701,7 +710,8 @@ destination_for() {
       guidelines/javascript-typescript.md | \
       guidelines/nestjs.md | \
       guidelines/nextjs.md | \
-      guidelines/typesafe-ai.md)
+      guidelines/typesafe-ai.md | \
+      guidelines/design-system.md)
       printf '%s/.agents/%s\n' "$TARGET" "$1"
       ;;
     *)
@@ -993,6 +1003,10 @@ render_context_profiles() {
   if contains_word "$stacks" 'docker'; then
     printf -- '- **Container, Compose, delivery, or runtime work:** %s; add an application profile only when its build or runtime behavior also changes.\n' \
       "$(markdown_path "$prefix" 'guidelines/docker.md')"
+  fi
+  if contains_word "$stacks" 'design-system'; then
+    printf -- '- **UI, styling, theming, or design-system work:** %s; add the framework profile only when its code also changes.\n' \
+      "$(markdown_path "$prefix" 'guidelines/design-system.md')"
   fi
   if contains_word "$stacks" 'typesafe-ai'; then
     printf -- '- **TypeSafe AI or Jev decision work:** %s; add the applicable language or framework profile only when its code also changes.\n' \
