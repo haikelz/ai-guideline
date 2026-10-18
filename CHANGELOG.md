@@ -5,6 +5,14 @@ All notable changes to this project are documented here. Releases follow
 
 ## [Unreleased]
 
+### Added
+
+- Opt-in `guidelines/tutor.md` (`--include tutor`): the agent explains while
+  sending the complete code, the owner types it by hand, and the agent reviews
+  with a run, ranked findings, and the fix for each one. Per-task switches (`tutor off`, `pair`,
+  `challenge`, `drill`) and a LeetCode-style drill mode with a hint ladder and the full
+  solution after each attempt.
+
 ### Changed
 
 - `general.md` now holds only every-task rules and the single precedence chain
