@@ -67,6 +67,14 @@ transactions, migrations, and deployment.
   `base-nova`, Geist Sans and Geist Mono, oklch tokens, theming, flat surfaces,
   layout, components, motion, accessibility, and Svelte ports.
 
+### Learning
+
+- [`guidelines/tutor.md`](guidelines/tutor.md) — opt-in tutor and reviewer
+  mode: the agent explains while sending the complete code, the owner types it
+  by hand, the agent reviews. Includes per-task switches and a LeetCode-style drill mode.
+  Install with `--include tutor`, or add `include tutor` to
+  `.ai-guideline.conf` so later runs keep it.
+
 ### AI decision systems
 
 - [`guidelines/typesafe-ai.md`](guidelines/typesafe-ai.md) — TypeSafe System One
@@ -270,7 +278,7 @@ exclude docker
 
 Supported names are `javascript-typescript`, `astro`, `nextjs`, `nestjs`, `go`,
 `echo`, `fiber`, `gorm-postgresql`, `docker`, `typesafe-ai`, and
-`design-system`. Unknown names, malformed lines,
+`design-system`, and `tutor`. Unknown names, malformed lines,
 duplicate include/exclude conflicts, and framework selections without their
 language dependency are rejected before files are written. An explicit Docker
 exclusion is allowed when a project does not use containers.
@@ -339,6 +347,7 @@ terminal or plugin tools.
 | `components.json` (shadcn or ReUI config) | Frontend design system |
 | `@typesafe-ai/sdk` in `package.json` | TypeSafe AI, in addition to JavaScript and TypeScript |
 | `typesafe-sdk` in `pyproject.toml` or `requirements.txt` | TypeSafe AI |
+| Never detected; opt in with `--include tutor` | Tutor and reviewer mode |
 
 The owner profile installs with its base language guideline:
 `haikel-javascript-typescript.md` with JavaScript and TypeScript, and

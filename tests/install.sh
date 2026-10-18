@@ -226,6 +226,17 @@ assert_file "$http_client/.agents/guidelines/typesafe-ai.md"
 assert_no_file "$http_client/.agents/guidelines/javascript-typescript.md"
 assert_contains "$http_client/AGENTS.md" 'TypeSafe AI or Jev decision work'
 "$INSTALLER" --exclude typesafe-ai "$decision_repo/apps/triage" >/dev/null
+
+tutor_repo="$work/tutor-practice"
+mkdir -p "$tutor_repo"
+"$INSTALLER" "$tutor_repo" >/dev/null
+assert_no_file "$tutor_repo/.agents/guidelines/tutor.md"
+assert_not_contains "$tutor_repo/AGENTS.md" 'Tutor mode is on'
+"$INSTALLER" --include tutor "$tutor_repo" >/dev/null
+assert_file "$tutor_repo/.agents/guidelines/tutor.md"
+assert_contains "$tutor_repo/AGENTS.md" 'Tutor mode is on'
+"$INSTALLER" "$tutor_repo" >/dev/null
+assert_no_file "$tutor_repo/.agents/guidelines/tutor.md"
 assert_no_file "$decision_repo/apps/triage/.agents/guidelines/typesafe-ai.md"
 
 without_ignores="$work/without-ignores"
