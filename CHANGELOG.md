@@ -16,9 +16,14 @@ All notable changes to this project are documented here. Releases follow
   drills that train the weakest pattern, and reports on `progress`.
 - Every install includes tutor mode by default; `--exclude tutor` or
   `exclude tutor` in `.ai-guideline.conf` opts out.
+- `guidelines/design-system.md` §3 adds the ReUI MCP server setup and a
+  search, read, install, validate workflow for every UI task.
 
 ### Changed
 
+- `guidelines/design-system.md` §1 splits projects into from-scratch and
+  handover. ReUI applies only when the owner mentions it; handover projects
+  keep their existing component system, tokens, and fonts.
 - `general.md` now holds only every-task rules and the single precedence chain
   (§2); setup, documentation, CI, and process guidance moved to the new
   `harness.md`, which defers to a repository's own harness workflow. Every
