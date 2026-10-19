@@ -71,8 +71,9 @@ transactions, migrations, and deployment.
 
 - [`guidelines/tutor.md`](guidelines/tutor.md) — default tutor and reviewer
   mode: the agent explains while sending the complete code, the owner types it
-  by hand, the agent reviews. Includes per-task switches and a LeetCode-style drill mode.
-  Every install includes it. Opt out with `--exclude tutor`, or add
+  by hand, the agent reviews. Includes per-task switches, a LeetCode-style
+  drill mode, and a progress log in `.agents/tutor-log.md` that picks your
+  next drill. Every install includes it. Opt out with `--exclude tutor`, or add
   `exclude tutor` to `.ai-guideline.conf` so later runs keep it off.
 
 ### AI decision systems
