@@ -12,6 +12,8 @@ All notable changes to this project are documented here. Releases follow
   and the fix for each one. Per-task switches (`tutor off`, `pair`,
   `challenge`, `drill`) and a LeetCode-style drill mode with a hint ladder and
   the full solution after each attempt.
+- Tutor mode keeps an append-only progress log in `.agents/tutor-log.md`, picks
+  drills that train the weakest pattern, and reports on `progress`.
 - Every install includes tutor mode by default; `--exclude tutor` or
   `exclude tutor` in `.ai-guideline.conf` opts out.
 
