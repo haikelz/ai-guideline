@@ -65,7 +65,9 @@ transactions, migrations, and deployment.
 
 - [`guidelines/design-system.md`](guidelines/design-system.md) — ReUI on shadcn
   `base-nova`, Geist Sans and Geist Mono, oklch tokens, theming, flat surfaces,
-  layout, components, motion, accessibility, and Svelte ports.
+  layout, components, motion, accessibility, and Svelte ports. Applies to
+  from-scratch projects where the owner mentions ReUI, with the ReUI MCP
+  workflow; handover projects keep their existing system.
 
 ### Learning
 
@@ -346,7 +348,7 @@ terminal or plugin tools.
 | Fiber module in `go.mod` | Fiber, in addition to Go |
 | GORM plus a PostgreSQL driver in the same `go.mod` | GORM and PostgreSQL, in addition to Go |
 | Dockerfile or Compose file | Docker |
-| `components.json` (shadcn or ReUI config) | Frontend design system |
+| `components.json` (shadcn or ReUI config) | Frontend design system (ReUI applies only when the owner mentions it) |
 | `@typesafe-ai/sdk` in `package.json` | TypeSafe AI, in addition to JavaScript and TypeScript |
 | `typesafe-sdk` in `pyproject.toml` or `requirements.txt` | TypeSafe AI |
 | Every project unless `exclude tutor` | Tutor and reviewer mode |

@@ -1013,7 +1013,7 @@ render_context_profiles() {
       "$(markdown_path "$prefix" 'guidelines/docker.md')"
   fi
   if contains_word "$stacks" 'design-system'; then
-    printf -- '- **UI, styling, theming, or design-system work:** %s; add the framework profile only when its code also changes.\n' \
+    printf -- '- **UI, styling, theming, or design-system work:** %s; its §1 decides whether ReUI applies (from-scratch projects where the owner mentions it) or the existing system stays (handover projects). Add the framework profile only when its code also changes.\n' \
       "$(markdown_path "$prefix" 'guidelines/design-system.md')"
   fi
   if contains_word "$stacks" 'typesafe-ai'; then
