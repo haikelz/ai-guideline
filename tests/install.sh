@@ -230,13 +230,16 @@ assert_contains "$http_client/AGENTS.md" 'TypeSafe AI or Jev decision work'
 tutor_repo="$work/tutor-practice"
 mkdir -p "$tutor_repo"
 "$INSTALLER" "$tutor_repo" >/dev/null
-assert_no_file "$tutor_repo/.agents/guidelines/tutor.md"
-assert_not_contains "$tutor_repo/AGENTS.md" 'Tutor mode is on'
-"$INSTALLER" --include tutor "$tutor_repo" >/dev/null
 assert_file "$tutor_repo/.agents/guidelines/tutor.md"
 assert_contains "$tutor_repo/AGENTS.md" 'Tutor mode is on'
-"$INSTALLER" "$tutor_repo" >/dev/null
+"$INSTALLER" --exclude tutor "$tutor_repo" >/dev/null
 assert_no_file "$tutor_repo/.agents/guidelines/tutor.md"
+assert_not_contains "$tutor_repo/AGENTS.md" 'Tutor mode is on'
+printf 'exclude tutor\n' >"$tutor_repo/.ai-guideline.conf"
+"$INSTALLER" --include tutor "$tutor_repo" >/dev/null 2>&1 && fail 'include and exclude tutor must conflict'
+rm "$tutor_repo/.ai-guideline.conf"
+"$INSTALLER" --include tutor "$tutor_repo" >/dev/null
+assert_file "$tutor_repo/.agents/guidelines/tutor.md"
 assert_no_file "$decision_repo/apps/triage/.agents/guidelines/typesafe-ai.md"
 
 without_ignores="$work/without-ignores"

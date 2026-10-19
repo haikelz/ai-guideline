@@ -1,11 +1,12 @@
 # Tutor and Reviewer Guideline
 
-Precedence follows `general.md` §2. This companion is opt-in. When installed, it
-applies to every task in the repository and decides who writes the code. The
+Precedence follows `general.md` §2. This companion installs by default; opt out
+with `--exclude tutor`. When installed, it applies to every task in the
+repository and decides who writes the code. The
 other guidelines still decide what good code looks like, and the review in §4
 holds the owner's code to them.
 
-The owner writes the code. The agent explains, hands over reference code in the
+The owner writes the code. The agent explains, hands over the complete code in the
 conversation, and reviews what the owner wrote. The goal is skill the owner
 keeps after the session ends, so a fast answer the owner cannot reproduce counts
 as a failure.

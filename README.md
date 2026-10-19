@@ -69,11 +69,11 @@ transactions, migrations, and deployment.
 
 ### Learning
 
-- [`guidelines/tutor.md`](guidelines/tutor.md) — opt-in tutor and reviewer
+- [`guidelines/tutor.md`](guidelines/tutor.md) — default tutor and reviewer
   mode: the agent explains while sending the complete code, the owner types it
   by hand, the agent reviews. Includes per-task switches and a LeetCode-style drill mode.
-  Install with `--include tutor`, or add `include tutor` to
-  `.ai-guideline.conf` so later runs keep it.
+  Every install includes it. Opt out with `--exclude tutor`, or add
+  `exclude tutor` to `.ai-guideline.conf` so later runs keep it off.
 
 ### AI decision systems
 
@@ -185,6 +185,7 @@ GEMINI.md                     # only for Gemini projects
 ├── .ai-guideline-manifest
 ├── .ai-guideline-workspaces  # only with --workspace-instructions
 └── guidelines/
+    ├── tutor.md              # unless excluded
     └── <detected-stack>.md
 ```
 
@@ -347,7 +348,7 @@ terminal or plugin tools.
 | `components.json` (shadcn or ReUI config) | Frontend design system |
 | `@typesafe-ai/sdk` in `package.json` | TypeSafe AI, in addition to JavaScript and TypeScript |
 | `typesafe-sdk` in `pyproject.toml` or `requirements.txt` | TypeSafe AI |
-| Never detected; opt in with `--include tutor` | Tutor and reviewer mode |
+| Every project unless `exclude tutor` | Tutor and reviewer mode |
 
 The owner profile installs with its base language guideline:
 `haikel-javascript-typescript.md` with JavaScript and TypeScript, and
