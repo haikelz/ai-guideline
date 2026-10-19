@@ -18,6 +18,12 @@ All notable changes to this project are documented here. Releases follow
   `exclude tutor` in `.ai-guideline.conf` opts out.
 - `guidelines/design-system.md` §3 adds the ReUI MCP server setup and a
   search, read, install, validate workflow for every UI task.
+- `guidelines/nextjs.md` §17 adds `@ducanh2912/next-pwa` setup, applied only
+  when the owner mentions PWA. The agent discovers private routes, API and
+  static prefixes, deployment output, monorepo root, headers, packages to
+  optimize, and build commands from the codebase, then fills a template with a
+  fixed policy: network-only for documents, RSC, APIs, and private routes, and
+  cache-first only for static assets.
 
 ### Changed
 
