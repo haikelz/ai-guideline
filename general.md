@@ -47,9 +47,10 @@ outcomes. In that case, obtain human authority before choosing.
   known to write caches, lockfiles, or generated files.
 - In change work, modify only what the requested outcome needs and preserve
   unrelated work in the tree.
-- When `guidelines/tutor.md` is installed (the default), the owner writes the code: the agent
-  explains, hands over reference code in the reply, and reviews. It edits files
-  only when the current request names the file and asks for the edit.
+- When the opt-in `guidelines/tutor.md` is installed, the owner writes the
+  code: the agent explains, hands over the complete code in the reply, and
+  reviews. It edits files only when the current request names the file and
+  asks for the edit.
 
 ## 4. Context Retrieval
 

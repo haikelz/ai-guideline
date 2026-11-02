@@ -513,18 +513,14 @@ for stack in "${include_args[@]:-}"; do
       add_workspace_stack '.' 'go' 'explicit include: go'
       add_workspace_stack '.' 'docker' 'explicit include: go (runtime companion)'
       ;;
-    tutor) ;;
     *) add_workspace_stack '.' "$stack" "explicit include: $stack" ;;
   esac
 done
 for stack in "${exclude_args[@]:-}"; do
   [[ -z "$stack" ]] || remove_workspace_stack "$stack"
 done
-# ponytail: tutor mode is a role, not a stack, so it installs everywhere unless excluded.
-tutor_enabled=1
-array_contains 'tutor' "${exclude_args[@]:-}" && tutor_enabled=0
 
-stack_order=(javascript-typescript astro nextjs nestjs design-system go echo fiber gorm-postgresql docker typesafe-ai)
+stack_order=(javascript-typescript astro nextjs nestjs design-system go echo fiber gorm-postgresql docker typesafe-ai tutor)
 for index in "${!workspace_stacks[@]}"; do
   stacks=${workspace_stacks[$index]}
   ordered_stacks=''
@@ -611,7 +607,7 @@ if contains_word "$all_stacks" 'design-system'; then
   add_detected 'design-system'
   add_selected 'guidelines/design-system.md'
 fi
-if ((tutor_enabled)); then
+if contains_word "$all_stacks" 'tutor'; then
   add_selected 'guidelines/tutor.md'
 fi
 
@@ -1042,7 +1038,7 @@ relative_agents_dir() {
   printf '%s\n' "$BEGIN_MARKER"
   printf '## AI Engineering Guidelines\n\n'
   printf '%s\n\n' "Read \`.agents/general.md\` and \`.agents/preferences.md\` for every task. Then select the smallest matching context profile below. Do not read every installed companion by default. Precedence follows \`.agents/general.md\` §2: repository-local instructions win, then the \`haikel-*\` owner profile, then the other guidelines."
-  if ((tutor_enabled)); then
+  if contains_word "$all_stacks" 'tutor'; then
     printf '%s\n\n' "**Tutor mode is on.** Read \`.agents/guidelines/tutor.md\` before every task. It decides who writes the code and overrides the change-work rules in \`.agents/general.md\` §3; the other guidelines still decide what good code looks like."
   fi
   render_context_profiles "$all_stacks" '.agents'
