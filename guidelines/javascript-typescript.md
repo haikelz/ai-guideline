@@ -15,8 +15,7 @@ The terms **MUST**, **SHOULD**, and **AVOID** are normative.
   changes it.
 - Abstractions MUST remove demonstrated complexity or meaningful duplication.
 - Code SHOULD use the language and standard library before adding a dependency.
-- Comments SHOULD explain constraints, intent, or non-obvious tradeoffs. They
-  MUST NOT narrate syntax or preserve dead code.
+- Comments follow `preferences.md` §9.
 - An optimization MUST be supported by measurement or a known constraint.
 
 ## 2. JavaScript Versus TypeScript

@@ -35,7 +35,7 @@ After editing, run the verification in `haikel-go.md` §8, inspect the final dif
 ## 4. Naming and Exported APIs
 
 - Follow Go naming conventions and standard initialisms such as `ID`, `URL`, `HTTP`, `JSON`, and `API`. Exception: domain transport types use the `Dto` prefix, as defined in `haikel-go.md` §2.
-- Exported identifiers MUST have a stable reason to be public and SHOULD have doc comments that begin with the identifier and explain the contract.
+- Exported identifiers MUST have a stable reason to be public. Write a doc comment, beginning with the identifier, when the contract is not obvious from the name and signature, when other modules consume the package, or when the repository's linter requires it (`preferences.md` §9).
 - Receiver names MUST be short and consistent across a type's methods; never `this` or `self`.
 - AVOID stuttering names such as `cache.CacheManager` and mutable exported package variables.
 - Removing or changing exported symbols requires explicit authorization or a compatible transition path.
@@ -113,7 +113,7 @@ Constructor shape, dependency validation, return type, and field export follow `
 - Package names are lowercase without underscores. Preserve existing legacy names until an authorized migration.
 - Struct tags MUST use the exact keys the serializer, validator, or ORM expects; formatting cannot catch a misspelled key.
 - Blank-line rhythm, literal expansion, signature wrapping, and tag order follow `haikel-go.md` §2.
-- Comments and identifiers use English. Remove commented-out code.
+- Identifiers use English. Comments follow `preferences.md` §9.
 - Generated files carry the standard marker and are regenerated, never hand-edited. Linter exclusions match generated paths narrowly.
 - Fix or explicitly explain every linter finding. Disable a check only at the smallest scope with a documented reason.
 

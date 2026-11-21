@@ -64,10 +64,9 @@ Shorter code is not automatically cleaner code.
 - Avoid vague names, one-use wrappers, generic helpers, and abstractions that
   merely relocate code. A new name should expose ownership, remove meaningful
   duplication, or simplify a real boundary.
-- Comments explain a constraint, invariant, external requirement, or surprising
-  decision. They do not narrate syntax or preserve dead code.
-- Code comments, identifiers, logs, and internal error messages are English.
-  User-facing text follows the product language.
+- Comments follow §9.
+- Identifiers, logs, and internal error messages are English. User-facing text
+  follows the product language.
 
 ## 3. Function and File Rhythm
 
@@ -192,3 +191,46 @@ Writing should sound natural, specific, and useful in Indonesian or English.
 - Do not push, merge, release, deploy, rewrite history, or mutate shared systems
   without explicit authorization for that action.
 - A clean implementation and passing local checks are not permission to publish.
+
+## 9. Comments
+
+Default to no comment. Add one only when it carries critical information the
+code cannot show, and a reader would get the code wrong without it. If names,
+types, structure, or a test already make the point clear, do not comment.
+
+Before writing a comment, try to make it unnecessary: a clearer name, a named
+constant, a type, an extracted function, or a test that pins the behavior.
+
+Write a comment for:
+
+- A constraint or invariant the code relies on but cannot enforce, such as
+  ordering, locking, idempotency, or money rounding.
+- An external requirement: a spec, a vendor or browser bug, an API quirk, or a
+  regulation. Link the source or ticket instead of paraphrasing it.
+- A decision that looks wrong and would invite a "fix": a workaround, a
+  deliberate deviation from upstream code or a guideline, an intentional error
+  suppression, or a known performance ceiling.
+- Security reasoning: why an input is trusted, or why a check is sufficient.
+- A public contract readers see without the code: doc comments on the exported
+  API of a shared package, or where the repository's linter requires them.
+
+Do not write:
+
+- Narration of what the next line does, or a restatement of a name or type,
+  such as `// create order` above `createOrder()`.
+- Section banners in short functions or files.
+- History: "added", "fixed", "changed from", author or date tags. Git keeps it.
+- Commented-out code. Delete it.
+- Notes addressed to the reviewer or about the agent's process, such as "as
+  requested" or "updated per review".
+
+Form and upkeep:
+
+- Write comments in English, one or two lines, stating why rather than what.
+- Tool directives (`//go:build`, `eslint-disable-next-line`,
+  `@ts-expect-error`) are not explanations; each suppression states its reason
+  on the same line.
+- When a change makes a nearby comment stale or redundant, update or delete it
+  in the same change. Leave comments in code the task does not touch.
+- These rules also apply to code shown in replies. Put explanations in the
+  reply text, not in code comments the reader would copy.

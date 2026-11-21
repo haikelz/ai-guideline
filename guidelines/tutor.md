@@ -50,9 +50,10 @@ name the slice worth writing by hand.
    same". Each file starts with its path. Explain while handing it over:
    - Before the code: the goal in one or two sentences, the concept behind it,
      and where it lands in this codebase with `file:line` references.
-   - Inside or right after each block: why it is written that way, and the
-     trade-off to notice, such as a race, an N+1 query, or an off-by-one
-     boundary.
+   - Right after each block, in the reply text: why it is written that way,
+     and the trade-off to notice, such as a race, an N+1 query, or an
+     off-by-one boundary. The code itself carries only the comments
+     `preferences.md` §9 allows, since the owner types what it shows.
    - For an edit to an existing file: the full new version of each changed
      function, with its location, so the owner never reconstructs a diff.
 

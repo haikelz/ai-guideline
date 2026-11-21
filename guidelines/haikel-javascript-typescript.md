@@ -21,9 +21,7 @@ boundaries, and easy to trace from a route or component to its owning behavior.
   phases of a function instead of presenting correct code as one dense block.
 - A file MUST have one clear responsibility. Keep route composition, UI,
   validation, remote data, and transport concerns at their natural boundaries.
-- Comments MUST explain a constraint or decision that code cannot state. Remove
-  stale comments, never narrate what the next line does, and never leave
-  commented-out implementation code.
+- Comments follow `preferences.md` §9.
 
 ## 2. Format, Imports, and Naming
 

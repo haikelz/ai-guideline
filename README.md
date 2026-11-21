@@ -17,7 +17,7 @@ transactions, migrations, and deployment.
   for setup or process work, and it defers to a repository's own harness.
 - [`preferences.md`](preferences.md) — owner's cross-stack quality profile for
   code rhythm, complete-scope cleanup, frontend libraries, interface design,
-  natural writing, verification, and Git delivery.
+  natural writing, verification, Git delivery, and comments.
 - [`ignores/README.md`](ignores/README.md) — supported coding-agent ignore files,
   shared exclusions, tool mappings, and security limitations.
 - [`CHANGELOG.md`](CHANGELOG.md) — version history and notable behavior changes.
