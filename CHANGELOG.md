@@ -22,6 +22,9 @@ All notable changes to this project are documented here. Releases follow
   optimize, and build commands from the codebase, then fills a template with a
   fixed policy: network-only for documents, RSC, APIs, and private routes, and
   cache-first only for static assets.
+- `preferences.md` §9 sets one comment policy for every stack: no comment
+  unless it carries critical information the code cannot show. The JavaScript,
+  TypeScript, and Go guides point to it instead of restating their own rules.
 
 ### Changed
 
